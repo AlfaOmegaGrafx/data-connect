@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { ArrowRightIcon, HomeIcon, RotateCcwIcon, XIcon } from "lucide-react"
+import { ArrowRightIcon, HomeIcon, RotateCcwIcon } from "lucide-react"
 import { ActionButton } from "@/components/typography/button-action"
 import { Text } from "@/components/typography/text"
 import { PageHeading } from "@/components/typography/page-heading"
