@@ -554,8 +554,8 @@ pub async fn open_platform_export_folder(
     super::download::open_folder(data_dir.to_string_lossy().to_string()).await
 }
 
-/// Trim an export JSON after successful delivery to the personal server.
-/// Strips the large `content` payload, preserving metadata so `load_runs` still works.
+/// Mark an export as synced after successful delivery to the personal server.
+/// Preserves the full content payload alongside synced metadata.
 #[tauri::command]
 pub async fn mark_export_synced(
     app: AppHandle,
@@ -613,9 +613,7 @@ pub async fn mark_export_synced(
 
     let synced_at = chrono::Utc::now().to_rfc3339();
 
-    // Strip the large content payload
-    data["content"] = serde_json::Value::Null;
-    // Add synced metadata at top level
+    // Add synced metadata at top level (content is preserved)
     data["syncedToPersonalServer"] = serde_json::Value::Bool(true);
     data["syncedAt"] = serde_json::Value::String(synced_at);
     if let Some(count) = items_exported {
@@ -628,12 +626,12 @@ pub async fn mark_export_synced(
         data["scope"] = serde_json::Value::String(s.clone());
     }
 
-    let trimmed = serde_json::to_string_pretty(&data)
-        .map_err(|e| format!("Failed to serialize trimmed export: {}", e))?;
-    fs::write(&json_path, &trimmed)
-        .map_err(|e| format!("Failed to write trimmed export: {}", e))?;
+    let updated = serde_json::to_string_pretty(&data)
+        .map_err(|e| format!("Failed to serialize export: {}", e))?;
+    fs::write(&json_path, &updated)
+        .map_err(|e| format!("Failed to write export: {}", e))?;
 
-    log::info!("Marked export as synced for run {} (trimmed {})", run_id, json_path.display());
+    log::info!("Marked export as synced for run {} ({})", run_id, json_path.display());
     Ok(())
 }
 
