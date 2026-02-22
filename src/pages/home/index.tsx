@@ -8,13 +8,14 @@ import { useConnectorUpdates } from "@/hooks/useConnectorUpdates"
 import { useConnectedApps } from "@/hooks/useConnectedApps"
 import { usePersonalServer } from "@/hooks/usePersonalServer"
 import type { Platform, RootState } from "@/types"
+import { PageContainer } from "@/components/elements/page-container"
+import { DebugTogglePanel } from "@/components/elements/debug-toggle-panel"
 import { SlidingTabs } from "@/components/elements/sliding-tabs"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { ConnectedAppsList } from "@/pages/home/components/connected-apps-list"
 import { ConnectedSourcesList } from "@/pages/home/components/connected-sources-list"
 import { AvailableSourcesList } from "@/pages/home/components/available-sources-list"
 import { ConnectorUpdates } from "@/pages/home/components/connector-updates"
-import { Text } from "@/components/typography/text"
 import { Button } from "@/components/ui/button"
 import { ROUTES } from "@/config/routes"
 import {
@@ -23,12 +24,20 @@ import {
 } from "@/lib/grant-params"
 import { getPlatformRegistryEntry } from "@/lib/platform/utils"
 import { DEV_FLAGS } from "@/config/dev-flags"
-import { testConnectedApps, testConnectedPlatforms, testPlatforms } from "./fixtures"
+import {
+  testConnectedApps,
+  testConnectedPlatforms,
+  testPlatforms,
+} from "./fixtures"
 
 export function Home() {
   const navigate = useNavigate()
-  const { platforms, isPlatformConnected, loadPlatforms, refreshConnectedStatus } =
-    usePlatforms()
+  const {
+    platforms,
+    isPlatformConnected,
+    loadPlatforms,
+    refreshConnectedStatus,
+  } = usePlatforms()
   const { startImport } = useConnector()
   const { checkForUpdates } = useConnectorUpdates()
   const { connectedApps, fetchConnectedApps } = useConnectedApps()
@@ -45,7 +54,11 @@ export function Home() {
   ]
 
   const displayPlatforms =
-    platforms.length > 0 ? platforms : DEV_FLAGS.useHomeTestFixtures ? testPlatforms : []
+    platforms.length > 0
+      ? platforms
+      : DEV_FLAGS.useHomeTestFixtures
+        ? testPlatforms
+        : []
   const displayConnectedApps =
     connectedApps.length > 0
       ? connectedApps
@@ -173,26 +186,23 @@ export function Home() {
   ])
 
   return (
-    <div className="container py-w16">
+    <PageContainer>
       {/* Connector Updates - show when browser is ready */}
       <ConnectorUpdates onReloadPlatforms={loadPlatforms} />
 
       {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="space-y-w12"
-      >
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MotionConfig reducedMotion={enableTabMotion ? "never" : "always"}>
           <SlidingTabs
             tabs={tabs}
             value={activeTab}
             onValueChange={setActiveTab}
+            className="pb-w12"
           />
         </MotionConfig>
 
         {/* SOURCES */}
-        <TabsContent value="sources" className="space-y-w12">
+        <TabsContent value="sources" className="space-y-w8">
           <ConnectedSourcesList
             platforms={connectedPlatformsList}
             runs={runs}
@@ -223,12 +233,9 @@ export function Home() {
 
       {/* DEV ONLY SHORTCUT: RickRoll /connect link */}
       {import.meta.env.DEV && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className="rounded-card bg-background p-3 shadow-md">
-            <Text intent="small" weight="medium">
-              Home debug
-            </Text>
-            <div className="mt-3 flex flex-wrap gap-2">
+        <DebugTogglePanel title="Home debug">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
               <Button type="button" size="xs" variant="outline" asChild>
                 <a href="/connect?sessionId=grant-session-1770358735328&appId=rickroll&scopes=%5B%22read%3Achatgpt-conversations%22%5D">
                   Open Rickroll connect
@@ -236,7 +243,7 @@ export function Home() {
               </Button>
             </div>
             <form
-              className="mt-3 flex flex-col gap-2"
+              className="flex flex-col gap-2"
               onSubmit={e => {
                 e.preventDefault()
                 handleTestDeepLink()
@@ -254,8 +261,8 @@ export function Home() {
               </Button>
             </form>
           </div>
-        </div>
+        </DebugTogglePanel>
       )}
-    </div>
+    </PageContainer>
   )
 }
