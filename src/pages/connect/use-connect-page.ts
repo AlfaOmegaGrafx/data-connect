@@ -57,6 +57,7 @@ export function useConnectPage(): UseConnectPageResult {
   const prefetchedSessionRef = useRef<string | null>(null)
   const prefetchedDataRef = useRef<PrefetchedGrantData | null>(null)
   const [prefetched, setPrefetched] = useState<PrefetchedGrantData | null>(null)
+  const [prefetchDone, setPrefetchDone] = useState(false)
   const requestedScopes =
     params.scopes && params.scopes.length > 0 ? params.scopes : undefined
   const claimedScopes = prefetched?.session.scopes
@@ -70,8 +71,14 @@ export function useConnectPage(): UseConnectPageResult {
     const sessionIdParam = params.sessionId
     const secretParam = params.secret
 
-    if (!sessionIdParam || !secretParam) return
-    if (import.meta.env.DEV && sessionIdParam.startsWith("grant-session-")) return
+    if (!sessionIdParam || !secretParam) {
+      setPrefetchDone(true)
+      return
+    }
+    if (import.meta.env.DEV && sessionIdParam.startsWith("grant-session-")) {
+      setPrefetchDone(true)
+      return
+    }
     if (prefetchedSessionRef.current === sessionIdParam) return
 
     prefetchedSessionRef.current = sessionIdParam
@@ -98,6 +105,7 @@ export function useConnectPage(): UseConnectPageResult {
           appUserId: claimed.appUserId,
         }
       } catch {
+        setPrefetchDone(true)
         return
       }
 
@@ -114,6 +122,7 @@ export function useConnectPage(): UseConnectPageResult {
         prefetchedDataRef.current = result
         setPrefetched(result)
       }
+      setPrefetchDone(true)
     })()
   }, [params.secret, params.sessionId])
 
@@ -180,7 +189,11 @@ export function useConnectPage(): UseConnectPageResult {
         : null
 
   const isBusy = isCheckingPlatforms || isConnecting
-  const isAutoRedirecting = hasGrantSession && platformsLoaded && isAlreadyConnected
+  // Show loading while prefetch is resolving scopes (avoids a brief
+  // "no connector" error flash when the deep link omits scopes).
+  const isAutoRedirecting =
+    (hasGrantSession && platformsLoaded && isAlreadyConnected) ||
+    (hasGrantSession && !prefetchDone)
   const busyCta = isCheckingPlatforms
     ? "Checking connectors..."
     : getConnectBusyCta(activeRun)
