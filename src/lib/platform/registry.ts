@@ -42,6 +42,17 @@ export const PLATFORM_REGISTRY: PlatformRegistryEntry[] = [
     ingestScope: "instagram.posts",
   },
   {
+    id: "github",
+    displayName: "GitHub",
+    iconKey: "github",
+    iconEmoji: "🐙",
+    primaryColor: "#24292F",
+    platformIds: ["github-playwright", "github"],
+    availability: "requiresConnector",
+    showInConnectList: true,
+    ingestScope: "github.profile",
+  },
+  {
     id: "linkedin",
     displayName: "LinkedIn",
     iconKey: "linkedin",
