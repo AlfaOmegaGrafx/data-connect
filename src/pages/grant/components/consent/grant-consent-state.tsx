@@ -46,14 +46,6 @@ export function GrantConsentState({
   const dataSourceLabel = getPrimaryDataSourceLabel(session?.scopes)
   const dataLabel = dataSourceLabel ? `${dataSourceLabel} data` : "data"
   const scopeLabels = session?.scopes?.map(formatScopeLabel) ?? []
-  const scopeActionLabel =
-    scopeLabels.length === 0
-      ? dataLabel
-      : scopeLabels.length === 1
-        ? scopeLabels[0]
-        : scopeLabels.length === 2
-          ? `${scopeLabels[0]} and ${scopeLabels[1]}`
-          : `${scopeLabels.slice(0, -1).join(", ")}, and ${scopeLabels[scopeLabels.length - 1]}`
   const appName =
     builderName ?? builderManifest?.name ?? session?.appName ?? "this app"
   const builderIconSrc = pickBuilderIcon(builderManifest)

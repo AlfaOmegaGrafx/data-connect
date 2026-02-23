@@ -20,7 +20,7 @@ import type {
   ProgressPhase,
 } from '../types';
 import { normalizeExportData } from '../lib/export-data';
-import { getScopeForPlatform, ingestData, ingestExportData } from '../services/personalServerIngest';
+import { ingestExportData } from '../services/personalServerIngest';
 
 const isDev = import.meta.env.DEV;
 
@@ -181,7 +181,7 @@ async function persistAndDeliverExport({
     const serverStatus = await invoke<{ running: boolean; port?: number }>('get_personal_server_status');
     if (!serverStatus.running || !serverStatus.port) return;
 
-    const ingested = await ingestExportData(serverStatus.port, platformId, exportData as Record<string, unknown>);
+    const ingested = await ingestExportData(serverStatus.port, platformId, exportData as unknown as Record<string, unknown>);
     if (ingested.length === 0) return;
 
     await invoke('mark_export_synced', {

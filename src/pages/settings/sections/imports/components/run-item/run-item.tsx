@@ -22,7 +22,6 @@ export function RunItem({ run, onStop, serverPort, serverReady }: RunItemProps) 
     ingestButtonLabel,
     formattedDate,
     conversations,
-    scope,
     canIngest,
     showExpandToggle,
     handleToggleExpanded,
@@ -86,7 +85,7 @@ export function RunItem({ run, onStop, serverPort, serverReady }: RunItemProps) 
               <FolderOpenIcon aria-hidden="true" className="size-4" />
             </Button>
           )}
-          {run.exportPath && scope && (
+          {run.exportPath && canIngest && (
             <Button
               type="button"
               variant="outline"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { ingestExportData } from "@/services/personalServerIngest"
 import { openExportFolderPath } from "@/lib/open-resource"
@@ -98,7 +98,6 @@ export function useRunItem({ run, serverPort, serverReady }: UseRunItemProps) {
     ingestButtonLabel,
     formattedDate,
     conversations,
-    scope,
     canIngest,
     showExpandToggle,
     handleToggleExpanded,
