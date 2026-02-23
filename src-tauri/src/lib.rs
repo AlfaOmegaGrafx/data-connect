@@ -16,6 +16,10 @@ use tauri::{Listener, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env file into process environment so VITE_* vars are available
+    // to std::env::var() calls (e.g. VITE_ACCOUNT_URL, VITE_CHAIN_ID).
+    let _ = dotenvy::dotenv();
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
