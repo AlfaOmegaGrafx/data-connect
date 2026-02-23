@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useSelector } from 'react-redux';
 import type { RootState } from '../state/store';
-import { registerServer } from '../services/serverRegistration';
 
 interface PersonalServerStatus {
   running: boolean;
@@ -26,14 +25,6 @@ const MAX_RESTART_ATTEMPTS = 3;
 let _restartCount = 0;
 let _lastStartedWallet: string | null = null;
 let _lastMasterKeySignature: string | null = null;
-let _pendingTunnelRestart = false;
-// Prevents multiple Phase 3 (tunnel) restarts from duplicate server-registered events.
-// Set when a tunnel restart is scheduled; cleared when tunnel connects, server exits,
-// or a new auth session begins (Phase 2 restart with new wallet).
-let _tunnelRestartScheduled = false;
-// Tracks which wallet we've attempted gateway registration for.
-// Prevents duplicate registration calls across remounts. Reset on new auth session.
-let _registrationWallet: string | null = null;
 
 export function usePersonalServer() {
   const { walletAddress, masterKeySignature } = useSelector(
@@ -90,7 +81,6 @@ export function usePersonalServer() {
   const stopServer = useCallback(async () => {
     if (!isTauriRuntime()) return;
     running.current = false;
-    _pendingTunnelRestart = false;
     try {
       await invoke('stop_personal_server');
       _sharedStatus = 'stopped';
@@ -110,9 +100,7 @@ export function usePersonalServer() {
 
   const restartServer = useCallback(async (wallet?: string | null) => {
     console.log('[PersonalServer] Restarting with wallet:', wallet ?? 'none');
-    _restartCount = 0; // Reset crash counter for explicit restarts
-    _pendingTunnelRestart = false;
-    _tunnelRestartScheduled = false; // Explicit restart — allow fresh tunnel restart
+    _restartCount = 0;
     await stopServer();
     // Brief wait for port release (stop_personal_server already waits up to 3s,
     // but add a small buffer for OS-level cleanup)
@@ -133,20 +121,7 @@ export function usePersonalServer() {
       setStatus('running');
       setPort(event.payload.port);
 
-      if (_pendingTunnelRestart) {
-        _pendingTunnelRestart = false;
-        _tunnelRestartScheduled = true;
-        console.log('[PersonalServer] Deferred tunnel restart triggered...');
-        // Don't clear restartingRef — we're about to restart again
-        _restartCount = 0;
-        setTimeout(() => {
-          void stopServer().then(() => {
-            setTimeout(() => startServerRef.current(_lastStartedWallet), 500);
-          });
-        }, 1000);
-      } else {
-        restartingRef.current = false;
-      }
+      restartingRef.current = false;
     }).then((fn) => unlisteners.push(fn));
 
     listen<{ message: string }>('personal-server-error', (event) => {
@@ -154,7 +129,6 @@ export function usePersonalServer() {
       running.current = false;
       _sharedStatus = 'error';
       _sharedError = event.payload.message;
-      _pendingTunnelRestart = false;
       setStatus('error');
       setError(event.payload.message);
     }).then((fn) => unlisteners.push(fn));
@@ -166,7 +140,6 @@ export function usePersonalServer() {
       running.current = false;
       _sharedTunnelUrl = null;
       _sharedTunnelFailed = false;
-      _tunnelRestartScheduled = false;
       _sharedDevToken = null;
       setTunnelUrl(null);
       setTunnelFailed(false);
@@ -197,7 +170,6 @@ export function usePersonalServer() {
       console.log('[PersonalServer] Tunnel:', event.payload.url);
       _sharedTunnelUrl = event.payload.url;
       _sharedTunnelFailed = false;
-      _tunnelRestartScheduled = false;
       setTunnelUrl(event.payload.url);
       setTunnelFailed(false);
     }).then((fn) => unlisteners.push(fn));
@@ -208,43 +180,10 @@ export function usePersonalServer() {
       setTunnelFailed(true);
     }).then((fn) => unlisteners.push(fn));
 
-    // When gateway registration completes, restart the server so the
-    // library's startBackgroundServices() finds the registration and
-    // establishes the tunnel. Phase 2 gave us identity; this gives us tunnel.
+    // The wrapper now self-registers and connects the tunnel in a single
+    // pass, so we just log the event — no restart needed.
     listen<{ status: number; serverId: string | null }>('server-registered', (event) => {
       console.log('[PersonalServer] Server registered with gateway:', event.payload);
-      if (_sharedTunnelUrl) {
-        console.log('[PersonalServer] Tunnel already active, skipping restart');
-        return;
-      }
-      if (!_lastStartedWallet) {
-        console.log('[PersonalServer] No wallet available, skipping restart');
-        return;
-      }
-      // Deduplicate: if a tunnel restart is already in flight, ignore subsequent
-      // server-registered events (e.g. from the auth page re-registering after each
-      // server restart cycle). Clear when tunnel connects or server exits.
-      if (_tunnelRestartScheduled) {
-        console.log('[PersonalServer] Tunnel restart already scheduled, ignoring duplicate server-registered');
-        return;
-      }
-      // If Phase 2 is still in progress, defer the tunnel restart
-      if (_sharedStatus !== 'running') {
-        console.log('[PersonalServer] Phase 2 in progress, deferring tunnel restart...');
-        _pendingTunnelRestart = true;
-        restartingRef.current = true;
-        return;
-      }
-      console.log('[PersonalServer] Restarting to establish tunnel...');
-      _tunnelRestartScheduled = true;
-      restartingRef.current = true;
-      _restartCount = 0;
-      // Small delay to let the gateway propagate the registration
-      setTimeout(() => {
-        void stopServer().then(() => {
-          setTimeout(() => startServerRef.current(_lastStartedWallet), 500);
-        });
-      }, 1000);
     }).then((fn) => unlisteners.push(fn));
 
     listen<{ message: string }>('personal-server-log', (event) => {
@@ -281,75 +220,16 @@ export function usePersonalServer() {
     if (_lastStartedWallet === walletAddress) return;
     _lastStartedWallet = walletAddress;
     _lastMasterKeySignature = masterKeySignature;
-    _tunnelRestartScheduled = false; // New auth session — allow a fresh tunnel restart
-    _registrationWallet = null; // New auth session — allow fresh gateway registration
-    console.log('[PersonalServer] Credentials available, restarting for identity...');
+    console.log('[PersonalServer] Credentials available, starting server...');
     _restartCount = 0;
     void stopServer().then(() => {
       setTimeout(() => startServerRef.current(walletAddress), 500);
     });
   }, [walletAddress, masterKeySignature, stopServer]);
 
-  // Phase 2.5 — Register server with gateway after Phase 2 completes.
-  // The personal server now has an identity (address + publicKey) but the
-  // gateway doesn't know about it. Without registration, the FRP tunnel
-  // server rejects connections ("Signer is not a registered server").
-  //
-  // Registration flow:
-  // 1. Get server identity from personal server /health
-  // 2. Sign EIP-712 ServerRegistration via account.vana.org/api/sign
-  // 3. POST to gateway POST /v1/servers
-  // 4. Restart server to establish the tunnel
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    if (status !== 'running' || !port) return;
-    if (!walletAddress || !masterKeySignature) return;
-    if (_registrationWallet === walletAddress) return;
-    if (_sharedTunnelUrl || _tunnelRestartScheduled || restartingRef.current) return;
-
-    _registrationWallet = walletAddress;
-
-    void (async () => {
-      try {
-        console.log('[PersonalServer] Checking gateway registration...');
-        const result = await registerServer(port, masterKeySignature, walletAddress);
-        console.log('[PersonalServer] Gateway registration result:', result);
-
-        if (result.alreadyRegistered) {
-          console.log('[PersonalServer] Server already registered with gateway');
-          // Still need to restart if we don't have a tunnel yet — the server's
-          // startBackgroundServices() may have run before registration existed.
-          if (!_sharedTunnelUrl && !_tunnelRestartScheduled) {
-            console.log('[PersonalServer] Restarting to pick up registration and establish tunnel...');
-            _tunnelRestartScheduled = true;
-            restartingRef.current = true;
-            _restartCount = 0;
-            setTimeout(() => {
-              void stopServer().then(() => {
-                setTimeout(() => startServerRef.current(_lastStartedWallet), 500);
-              });
-            }, 1000);
-          }
-          return;
-        }
-
-        // Fresh registration succeeded — restart to establish tunnel
-        console.log('[PersonalServer] Registration complete, restarting for tunnel...');
-        _tunnelRestartScheduled = true;
-        restartingRef.current = true;
-        _restartCount = 0;
-        setTimeout(() => {
-          void stopServer().then(() => {
-            setTimeout(() => startServerRef.current(_lastStartedWallet), 500);
-          });
-        }, 1000);
-      } catch (err) {
-        console.error('[PersonalServer] Gateway registration failed:', err);
-        // Non-fatal — the tunnel won't work but the app can still function locally
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, port, walletAddress, masterKeySignature]);
+  // Phase 2.5 removed — the wrapper now self-registers with the gateway
+  // before startBackgroundServices(), so frontend registration + restart
+  // is no longer needed.
 
   return { status, port, tunnelUrl, tunnelFailed, devToken, error, startServer, stopServer, restartServer, restartingRef };
 }
