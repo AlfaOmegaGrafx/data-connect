@@ -7,6 +7,7 @@ import { Text } from "@/components/typography/text"
 import { PageHeading } from "@/components/typography/page-heading"
 import { getPrimaryDataSourceLabel } from "@/lib/scope-labels"
 import { ROUTES } from "@/config/routes"
+import { buildSettingsUrl } from "@/pages/settings/url"
 
 interface GrantSuccessStateProps {
   appName?: string
@@ -33,7 +34,7 @@ export function GrantSuccessState({ appName, scopes }: GrantSuccessStateProps) {
 
         <Text as="p">
           You can manage or revoke access in{" "}
-          <Text as={Link} to={ROUTES.settings} link="default">
+          <Text as={Link} to={buildSettingsUrl({ section: "apps" })} link="default">
             Settings
           </Text>
           .
