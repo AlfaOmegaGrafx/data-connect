@@ -18,7 +18,8 @@ interface PlatformIconProps extends Omit<ComponentProps<"div">, "children"> {
 }
 
 // Default 2px padding to ensure the icon is centered within the wrapper
-const iconWrapper = "flex items-center justify-center rounded-button p-1"
+const iconWrapper =
+  "flex items-center justify-center rounded-button overflow-hidden p-1"
 
 /**
  * Platform icon component
@@ -49,7 +50,7 @@ export function PlatformIcon({
         <img
           src={imageSrc}
           alt={imageAlt}
-          className="rounded-full object-cover"
+          className="object-cover"
           style={{ width: `${size}px`, height: `${size}px` }}
         />
       </div>
