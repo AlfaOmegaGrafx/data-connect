@@ -56,6 +56,9 @@ npm install
 
 # Run in development mode
 npm run tauri:dev
+
+# Copy .env file
+cp .env.example .env
 ```
 
 ### Connector lifecycle (important)
