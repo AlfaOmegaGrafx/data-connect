@@ -14,6 +14,8 @@ const mockOpenPlatformExportFolder = vi.fn()
 const mockLoadLatestSourceExportPreview = vi.fn()
 const mockLoadLatestSourceExportFull = vi.fn()
 const mockOpenExportFolderPath = vi.fn()
+const silenceConsoleError = () =>
+  vi.spyOn(console, "error").mockImplementation(() => {})
 
 vi.mock("react-redux", () => ({
   useSelector: (selector: (state: typeof mockState) => unknown) =>
@@ -64,6 +66,7 @@ beforeEach(() => {
 
 describe("useSourceOverviewPage", () => {
   it("falls back to local path open when platform folder open fails", async () => {
+    mockLoadLatestSourceExportPreview.mockResolvedValue(null)
     mockOpenPlatformExportFolder.mockRejectedValue(new Error("open failed"))
 
     const { result } = renderHook(() => useSourceOverviewPage("chatgpt"))
@@ -79,7 +82,49 @@ describe("useSourceOverviewPage", () => {
     expect(mockOpenExportFolderPath).toHaveBeenCalled()
   })
 
+  it("opens preview file directory directly when preview metadata exists", async () => {
+    const { result } = renderHook(() => useSourceOverviewPage("chatgpt"))
+
+    await waitFor(() => {
+      expect(result.current.preview?.filePath).toContain("chatgpt.json")
+    })
+
+    await act(async () => {
+      await result.current.handleOpenSourcePath()
+    })
+
+    expect(mockOpenExportFolderPath).toHaveBeenCalledWith(
+      "/tmp/dataconnect/exported_data/OpenAI/ChatGPT/chatgpt.json"
+    )
+    expect(mockOpenPlatformExportFolder).not.toHaveBeenCalled()
+  })
+
+  it("loads preview/full export with ingest scope when available", async () => {
+    const { result } = renderHook(() => useSourceOverviewPage("chatgpt"))
+
+    await waitFor(() => {
+      expect(result.current.sourceEntry?.id).toBe("chatgpt")
+    })
+
+    expect(mockLoadLatestSourceExportPreview).toHaveBeenCalledWith(
+      "OpenAI",
+      "ChatGPT",
+      "chatgpt.conversations"
+    )
+
+    await act(async () => {
+      await result.current.handleCopyFullJson()
+    })
+
+    expect(mockLoadLatestSourceExportFull).toHaveBeenCalledWith(
+      "OpenAI",
+      "ChatGPT",
+      "chatgpt.conversations"
+    )
+  })
+
   it("sets copy status to error when clipboard copy fails", async () => {
+    const consoleErrorSpy = silenceConsoleError()
     const originalClipboard = navigator.clipboard
     const originalExecCommand = document.execCommand
 
@@ -103,7 +148,12 @@ describe("useSourceOverviewPage", () => {
       })
 
       expect(result.current.copyStatus).toBe("error")
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Failed to copy full JSON:",
+        expect.any(Error)
+      )
     } finally {
+      consoleErrorSpy.mockRestore()
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: originalClipboard,
@@ -150,6 +200,7 @@ describe("useSourceOverviewPage", () => {
   })
 
   it("falls back to preview JSON when full export load fails", async () => {
+    const consoleErrorSpy = silenceConsoleError()
     mockLoadLatestSourceExportPreview.mockResolvedValue({
       previewJson: "{\n  \"from\": \"preview\"\n}",
       isTruncated: false,
@@ -177,9 +228,14 @@ describe("useSourceOverviewPage", () => {
         await result.current.handleCopyFullJson()
       })
 
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Failed to load full source export JSON:",
+        expect.any(Error)
+      )
       expect(writeText).toHaveBeenCalledWith("{\n  \"from\": \"preview\"\n}")
       expect(result.current.copyStatus).toBe("copied")
     } finally {
+      consoleErrorSpy.mockRestore()
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: originalClipboard,
