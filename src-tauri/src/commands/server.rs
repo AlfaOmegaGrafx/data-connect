@@ -223,6 +223,10 @@ pub async fn start_personal_server(
         .unwrap_or_else(|_| "https://account.vana.org".to_string())));
     env_vars.push(("CHAIN_ID", std::env::var("VITE_CHAIN_ID")
         .unwrap_or_else(|_| "1480".to_string())));
+    env_vars.push(("TUNNEL_SERVER_ADDR", std::env::var("VITE_TUNNEL_SERVER_ADDR")
+        .unwrap_or_else(|_| "frpc.server.vana.org".to_string())));
+    env_vars.push(("TUNNEL_SERVER_PORT", std::env::var("VITE_TUNNEL_SERVER_PORT")
+        .unwrap_or_else(|_| "7000".to_string())));
 
     // Get config dir (~/data-connect/personal-server)
     if let Some(home) = dirs::home_dir() {

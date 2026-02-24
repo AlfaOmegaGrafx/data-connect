@@ -69,7 +69,9 @@ export async function registerServer(
     return { serverId: identity.serverId, alreadyRegistered: true };
   }
 
-  const serverUrl = `https://${identity.address.toLowerCase()}.server.vana.org`;
+  const tunnelDomain = (import.meta.env.VITE_TUNNEL_SERVER_ADDR || "frpc.server.vana.org")
+    .replace(/^frpc\./, '');
+  const serverUrl = `https://${identity.address.toLowerCase()}.${tunnelDomain}`;
 
   const message = {
     ownerAddress,
