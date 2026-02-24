@@ -90,7 +90,7 @@ export function DataApps() {
                         truncate
                         align="left"
                       >
-                        Coming soon
+                        View Next.js example app
                       </Text>
                       <div className="flex items-center gap-2 self-end h-full">
                         <ChevronRightIcon
