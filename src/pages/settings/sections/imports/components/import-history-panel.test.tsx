@@ -202,9 +202,9 @@ describe("ImportHistoryPanel", () => {
   })
 
   it("disables duplicate remove submits while removal is pending", async () => {
-    let resolveRemove: (() => void) | null = null
+    let resolveRemove: (() => void) | undefined
     const removePromise = new Promise<void>(resolve => {
-      resolveRemove = resolve
+      resolveRemove = () => resolve()
     })
     const removeRun = vi.fn(() => removePromise)
 
@@ -224,7 +224,10 @@ describe("ImportHistoryPanel", () => {
     expect(removeRun).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("button", { name: "Removing…" })).not.toBeNull()
 
-    resolveRemove?.()
+    if (!resolveRemove) {
+      throw new Error("Expected resolveRemove to be set")
+    }
+    resolveRemove()
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Removing…" })).toBeNull()
     })

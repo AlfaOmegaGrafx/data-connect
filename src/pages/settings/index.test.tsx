@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest"
 import { cleanup, fireEvent, render } from "@testing-library/react"
-import { createMemoryRouter, RouterProvider, useLocation } from "react-router"
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom"
 import { Provider } from "react-redux"
 import { ROUTES } from "@/config/routes"
 import { store } from "@/state/store"
@@ -13,8 +13,8 @@ const mockUseConnectedApps = vi.fn()
 const mockInvoke = vi.fn()
 const mockGetVersion = vi.fn()
 
-vi.mock("react-router", async () => {
-  const actual = await vi.importActual<object>("react-router")
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<object>("react-router-dom")
   return {
     ...actual,
     useNavigate: () => vi.fn(),

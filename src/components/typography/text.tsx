@@ -264,7 +264,7 @@ export const Text = <T extends ElementType = "div">({
       )}
       {...props}
     >
-      {formattedChildren}
+      {renderedChildren}
     </ResolvedComponent>
   )
 }

@@ -19,6 +19,8 @@ describe("checkConnectorUpdates", () => {
       {
         id: "chatgpt",
         name: "ChatGPT",
+        description: "ChatGPT connector",
+        company: "OpenAI",
         currentVersion: "1.0.0",
         latestVersion: "1.1.0",
         hasUpdate: true,
