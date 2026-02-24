@@ -1,6 +1,9 @@
 import { useMemo } from "react"
-import { PauseIcon } from "lucide-react"
-import { ActionButton } from "@/components/typography/button-action"
+import { ArrowUpRight, PauseIcon } from "lucide-react"
+import {
+  ActionButton,
+  ActionPanel,
+} from "@/components/typography/button-action"
 import { EyebrowBadge } from "@/components/typography/eyebrow-badge"
 import { Text } from "@/components/typography/text"
 import { Spinner } from "@/components/elements/spinner"
@@ -8,17 +11,13 @@ import { SourceStack } from "@/components/elements/source-row"
 import { cn } from "@/lib/classes"
 import { DEV_FLAGS } from "@/config/dev-flags"
 import type { Platform, Run } from "@/types"
-import {
-  getConnectSourceEntries,
-  getConnectSourceState,
-  resolvePlatformForEntry,
-} from "@/lib/platform/utils"
-import { getPlatformPrimaryColor } from "@/lib/platform/ui"
+import { getConnectSourceEntries } from "@/lib/platform/utils"
+import { OpenExternalLink } from "@/components/typography/link-open-external"
+import { buildAvailableCards } from "./available-sources-list.lib"
 
 interface AvailableSourcesListProps {
   platforms: Platform[]
   runs: Run[]
-  headline?: string
   onExport: (platform: Platform) => void
   connectedPlatformIds: string[]
 }
@@ -69,7 +68,6 @@ function getConnectingAccountLine(run: Run | undefined): string | undefined {
 export function AvailableSourcesList({
   platforms,
   runs,
-  headline = "Your sources at the moment.",
   onExport,
   connectedPlatformIds,
 }: AvailableSourcesListProps) {
@@ -104,144 +102,154 @@ export function AvailableSourcesList({
   //
   // IMPORTANT: This is preview scaffolding. Keep it gated by DEV_FLAGS only.
   // ===========================================================================
-  const FORCE_CONNECTING_PREVIEW =
-    import.meta.env.DEV && DEV_FLAGS.useHomeConnectingPreview
-  const FORCED_PLATFORM_ID = "instagram"
-  const FORCED_STATUS: string | undefined = "Importing data…"
+  const CONNECTING_PREVIEW = {
+    enabled: import.meta.env.DEV && DEV_FLAGS.useHomeConnectingPreview,
+    platformId: "instagram",
+    status: "Importing data…" as string | undefined,
+  }
 
   const hasAnyConnectingRun = useMemo(
     () =>
-      FORCE_CONNECTING_PREVIEW || runs.some(run => run.status === "running"),
-    [FORCE_CONNECTING_PREVIEW, runs]
+      CONNECTING_PREVIEW.enabled || runs.some(run => run.status === "running"),
+    [CONNECTING_PREVIEW.enabled, runs]
   )
+
+  const availableCards = useMemo(
+    () =>
+      buildAvailableCards({
+        connectEntries,
+        platforms,
+        connectedPlatformIdSet,
+        connectingPlatforms,
+        forceConnectingPreview: CONNECTING_PREVIEW.enabled,
+        forcedPlatformId: CONNECTING_PREVIEW.platformId,
+        forcedStatus: CONNECTING_PREVIEW.status,
+        onExport,
+      }),
+    [
+      connectEntries,
+      platforms,
+      connectedPlatformIdSet,
+      connectingPlatforms,
+      CONNECTING_PREVIEW.enabled,
+      onExport,
+    ]
+  )
+
+  if (availableCards.length === 0) {
+    return (
+      <section className="space-y-gap">
+        <Header />
+        <div className="action-outset">
+          <ActionPanel>
+            <Text weight="medium">All connected (more soon)</Text>
+          </ActionPanel>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-gap">
-      <Text as="h2" weight="medium">
-        {headline}
-      </Text>
+      <Header />
       <div className="grid grid-cols-2 gap-3 action-outset">
-        {connectEntries
-          .map(entry => {
-            const platform = resolvePlatformForEntry(platforms, entry)
-            if (platform && connectedPlatformIdSet.has(platform.id)) {
-              return null
-            }
-            const state = getConnectSourceState(entry, platform)
-            const shouldForceConnectingPreview =
-              FORCE_CONNECTING_PREVIEW &&
-              (entry.id === FORCED_PLATFORM_ID ||
-                platform?.id === FORCED_PLATFORM_ID)
-            const baseIsConnecting = platform
-              ? connectingPlatforms.has(platform.id)
-              : false
-            const baseConnectingRun = platform
-              ? connectingPlatforms.get(platform.id)
+        {availableCards.map(
+          ({
+            cardId,
+            iconName,
+            label,
+            stackPrimaryColor,
+            isAvailable,
+            isConnecting,
+            connectingStatusMessage,
+            connectingRun,
+            onClick,
+          }) => {
+            const connectingStatusLine = isConnecting
+              ? getConnectingStatusLine(
+                  connectingStatusMessage,
+                  connectingRun?.phase?.label
+                )
               : undefined
+            const connectingAccountLine = isConnecting
+              ? getConnectingAccountLine(connectingRun)
+              : undefined
+            const isPausedByAnotherRun =
+              hasAnyConnectingRun && isAvailable && !isConnecting
 
-            return {
-              iconName: entry.displayName,
-              label: `Connect ${entry.displayName}`,
-              stackPrimaryColor: getPlatformPrimaryColor(entry),
-              isAvailable: state === "available",
-              isConnecting: shouldForceConnectingPreview
-                ? true
-                : baseIsConnecting,
-              connectingStatusMessage: shouldForceConnectingPreview
-                ? FORCED_STATUS
-                : baseConnectingRun?.statusMessage,
-              connectingRun: shouldForceConnectingPreview
-                ? undefined
-                : baseConnectingRun,
-              onClick:
-                state === "available" && platform
-                  ? () => onExport(platform)
-                  : undefined,
-            }
-          })
-          .filter((card): card is NonNullable<typeof card> => card !== null)
-          .map((card, index) => ({
-            ...card,
-            index,
-            priority: card.isAvailable ? 0 : 1,
-          }))
-          .sort((a, b) => a.priority - b.priority || a.index - b.index)
-          .map(
-            ({
-              iconName,
-              label,
-              stackPrimaryColor,
-              isAvailable,
-              isConnecting,
-              connectingStatusMessage,
-              connectingRun,
-              onClick,
-            }) => {
-              const connectingStatusLine = isConnecting
-                ? getConnectingStatusLine(
-                    connectingStatusMessage,
-                    connectingRun?.phase?.label
-                  )
-                : undefined
-              const connectingAccountLine = isConnecting
-                ? getConnectingAccountLine(connectingRun)
-                : undefined
-              const isPausedByAnotherRun =
-                hasAnyConnectingRun && isAvailable && !isConnecting
-
-              return (
-                <ActionButton
-                  key={label}
-                  onClick={onClick}
-                  disabled={!isAvailable || hasAnyConnectingRun}
-                  selected={isConnecting}
-                  size="xl"
-                  className={cn("h-auto p-0 disabled:opacity-100")}
-                  aria-busy={isConnecting}
-                >
-                  <SourceStack
-                    iconName={iconName}
-                    label={label}
-                    stackPrimaryColor={stackPrimaryColor}
-                    infoSlot={
-                      isConnecting ? (
-                        <div className="ml-auto max-w-[180px]">
+            return (
+              <ActionButton
+                key={cardId}
+                onClick={onClick}
+                disabled={!isAvailable || hasAnyConnectingRun}
+                selected={isConnecting}
+                size="xl"
+                className={cn("h-auto p-0 disabled:opacity-100")}
+                aria-busy={isConnecting}
+              >
+                <SourceStack
+                  iconName={iconName}
+                  label={label}
+                  stackPrimaryColor={stackPrimaryColor}
+                  infoSlot={
+                    isConnecting ? (
+                      <div className="ml-auto max-w-[180px]">
+                        <Text as="p" intent="fine" muted truncate>
+                          {connectingStatusLine}
+                        </Text>
+                        {connectingAccountLine ? (
                           <Text as="p" intent="fine" muted truncate>
-                            {connectingStatusLine}
+                            {connectingAccountLine}
                           </Text>
-                          {connectingAccountLine ? (
-                            <Text as="p" intent="fine" muted truncate>
-                              {connectingAccountLine}
-                            </Text>
-                          ) : null}
-                        </div>
-                      ) : null
-                    }
-                    showArrow={isAvailable && !hasAnyConnectingRun}
-                    trailingSlot={
-                      isConnecting ? (
-                        <Spinner className="size-4" aria-hidden="true" />
-                      ) : isPausedByAnotherRun ? (
-                        <PauseIcon
-                          className="size-4 text-foreground-muted/70"
-                          aria-hidden="true"
-                        />
-                      ) : isAvailable ? null : (
-                        <EyebrowBadge
-                          variant="outline"
-                          className="text-foreground-muted"
-                        >
-                          soon
-                        </EyebrowBadge>
-                      )
-                    }
-                    labelColor={isAvailable ? "foreground" : "mutedForeground"}
-                  />
-                </ActionButton>
-              )
-            }
-          )}
+                        ) : null}
+                      </div>
+                    ) : null
+                  }
+                  showArrow={isAvailable && !hasAnyConnectingRun}
+                  trailingSlot={
+                    isConnecting ? (
+                      <Spinner className="size-4" aria-hidden="true" />
+                    ) : isPausedByAnotherRun ? (
+                      <PauseIcon
+                        className="size-4 text-foreground-muted/70"
+                        aria-hidden="true"
+                      />
+                    ) : isAvailable ? null : (
+                      <EyebrowBadge
+                        variant="outline"
+                        className="text-foreground-muted"
+                      >
+                        soon
+                      </EyebrowBadge>
+                    )
+                  }
+                  labelColor={isAvailable ? "foreground" : "mutedForeground"}
+                />
+              </ActionButton>
+            )
+          }
+        )}
       </div>
     </section>
+  )
+}
+
+const Header = () => {
+  return (
+    <div className="flex items-baseline justify-between">
+      <Text as="h2" weight="medium">
+        Connected sources
+      </Text>
+      <Text as="p" intent="small" muted>
+        <OpenExternalLink
+          href="https://github.com/vana-com/data-connect?tab=readme-ov-file#creating-a-connector"
+          intent="small"
+          withIcon
+        >
+          Add your own
+          <ArrowUpRight aria-hidden />
+        </OpenExternalLink>
+      </Text>
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import { Text } from "@/components/typography/text"
 import { cn } from "@/lib/classes"
 import { openExternalUrl } from "@/lib/open-resource"
 
-const linkClassName = "link hover:text-foreground"
+const linkClassName = "link [font:inherit] hover:text-foreground"
 
 type OpenExternalLinkProps = Omit<TextProps<"a">, "as" | "href"> & {
   href: string
@@ -26,7 +26,7 @@ export function OpenExternalLink({
       rel={rel}
       intent="inherit"
       color="inherit"
-      className={cn(linkClassName, "[font:inherit]", className)}
+      className={cn(linkClassName, className)}
       onClick={(event: MouseEvent<HTMLAnchorElement>) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -54,7 +54,7 @@ export function ActionLink({
       type="button"
       intent="inherit"
       color="inherit"
-      className={cn(linkClassName, "[font:inherit]", className)}
+      className={cn(linkClassName, className)}
       onClick={(event: MouseEvent<HTMLButtonElement>) => {
         onClick?.(event)
         if (event.defaultPrevented) return

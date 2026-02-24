@@ -102,7 +102,6 @@ export function SettingsApps({
         Want to build your own application? Check our{" "}
         <OpenExternalLink
           intent="small"
-          className="inline-flex text-current hover:text-foreground"
           href={LINKS.appBuilderDocs}
           withIcon
         >

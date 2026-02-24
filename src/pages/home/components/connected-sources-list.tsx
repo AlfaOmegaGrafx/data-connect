@@ -1,9 +1,9 @@
+import { SourceRow } from "@/components/elements/source-row"
 import {
   ActionButton,
   ActionPanel,
 } from "@/components/typography/button-action"
 import { Text } from "@/components/typography/text"
-import { SourceRow } from "@/components/elements/source-row"
 import { cn } from "@/lib/classes"
 import { getLastRunLabel } from "@/lib/platform/ui"
 import type { Platform, Run } from "@/types"

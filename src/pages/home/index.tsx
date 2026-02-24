@@ -219,7 +219,6 @@ export function Home() {
           <AvailableSourcesList
             platforms={availablePlatforms}
             runs={runs}
-            headline="Available connectors"
             onExport={handleImportSource}
             connectedPlatformIds={connectedPlatformsList.map(p => p.id)}
           />

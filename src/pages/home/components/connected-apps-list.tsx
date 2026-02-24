@@ -62,7 +62,7 @@ export function ConnectedAppsList({ apps }: ConnectedAppsListProps) {
         <Header />
         <div className="action-outset">
           <ActionPanel>
-            <Text weight="medium">No connected apps</Text>
+            <Text weight="medium">No connected apps yet</Text>
           </ActionPanel>
         </div>
       </section>
