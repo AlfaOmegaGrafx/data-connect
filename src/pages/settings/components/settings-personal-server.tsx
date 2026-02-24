@@ -6,6 +6,7 @@ import { SettingsRowDescriptionStatus } from "@/pages/settings/components/settin
 import {
   SettingsCard,
   SettingsCardStack,
+  SettingsRowAction,
 } from "@/pages/settings/components/settings-shared"
 
 type ServerRuntimeStatus = ReturnType<typeof usePersonalServer>["status"]
@@ -63,10 +64,14 @@ function getServerStatusDescription(
 
 interface SettingsPersonalServerSectionProps {
   personalServer: ReturnType<typeof usePersonalServer>
+  onRestartPersonalServer: () => void
+  onStopPersonalServer: () => void
 }
 
 export function SettingsPersonalServer({
   personalServer,
+  onRestartPersonalServer,
+  onStopPersonalServer,
 }: SettingsPersonalServerSectionProps) {
   const isTestMode =
     DEV_FLAGS.useSettingsUiMocks && TEST_SERVER_STATUS_OVERRIDE !== null
@@ -109,7 +114,6 @@ export function SettingsPersonalServer({
             />
             <SettingsDetailRow
               label="Public endpoint"
-              isLast
               labelInfo="Public URL that routes requests to your Personal Server."
               value={
                 <SettingsRowDescriptionCopy
@@ -117,7 +121,28 @@ export function SettingsPersonalServer({
                   intent="small"
                   emptyLabel="Not available yet"
                   copyLabel="Copy URL"
+                  // Callum says I know but don't touch please! :)
+                  buttonClassName="max-h-[21.17px]"
                 />
+              }
+            />
+            <SettingsDetailRow
+              label="Server controls"
+              isLast
+              value={
+                previewStatus === "running" ? (
+                  <SettingsRowAction onClick={() => onStopPersonalServer()}>
+                    Stop
+                  </SettingsRowAction>
+                ) : (
+                  <SettingsRowAction
+                    onClick={() => onRestartPersonalServer()}
+                    isLoading={previewStatus === "starting"}
+                    loadingLabel="Starting…"
+                  >
+                    Start
+                  </SettingsRowAction>
+                )
               }
             />
           </div>

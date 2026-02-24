@@ -1,5 +1,9 @@
 import type { ReactNode } from "react"
 import { settingsSidebarItemClassName } from "@/components/navigation/nav-item-styles"
+import {
+  compactNavTooltipClassName,
+  compactNavTooltipSide,
+} from "@/components/navigation/nav-tooltip"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -8,23 +12,23 @@ import {
 } from "@/components/ui/tooltip"
 import type { SettingsSection } from "../types"
 
-interface SettingsSidebarItem {
+interface SettingsLayoutSidebarItem {
   key: SettingsSection
   label: string
   icon: ReactNode
 }
 
-interface SettingsSidebarProps {
-  items: SettingsSidebarItem[]
+interface SettingsLayoutSidebarProps {
+  items: SettingsLayoutSidebarItem[]
   activeSection: SettingsSection
   onSectionChange: (section: SettingsSection) => void
 }
 
-export function SettingsSidebar({
+export function SettingsLayoutSidebar({
   items,
   activeSection,
   onSectionChange,
-}: SettingsSidebarProps) {
+}: SettingsLayoutSidebarProps) {
   return (
     <aside className="pt-w16">
       <nav className="sticky top-6 space-y-0.5 pt-1">
@@ -44,7 +48,10 @@ export function SettingsSidebar({
                 <span className="hidden md:inline">{section.label}</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" className="md:hidden">
+            <TooltipContent
+              side={compactNavTooltipSide}
+              className={compactNavTooltipClassName}
+            >
               {section.label}
             </TooltipContent>
           </Tooltip>

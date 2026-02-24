@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { setRuns } from '../state/store';
 import type { RootState } from '../state/store';
 import type { Run } from '../types';
+import { checkConnectorUpdates } from './check-connector-updates';
 interface SavedRun {
   id: string;
   platformId: string;
@@ -22,12 +23,13 @@ interface SavedRun {
 export function useInitialize() {
   const dispatch = useDispatch();
   const currentRuns = useSelector((state: RootState) => state.app.runs);
-  const initialized = useRef(false);
+  const runsInitialized = useRef(false);
+  const connectorUpdatesInitialized = useRef(false);
 
   useEffect(() => {
-    // Only run once on mount
-    if (initialized.current) return;
-    initialized.current = true;
+    // Hydrate persisted runs once on first mount.
+    if (runsInitialized.current) return;
+    runsInitialized.current = true;
 
     // Load saved runs from disk on startup
     const loadSavedRuns = async () => {
@@ -68,6 +70,23 @@ export function useInitialize() {
       }
     };
 
-    loadSavedRuns();
+    void loadSavedRuns();
   }, [dispatch, currentRuns]);
+
+  useEffect(() => {
+    // Run connector update check once at app init (silent, non-blocking).
+    if (connectorUpdatesInitialized.current) return;
+    connectorUpdatesInitialized.current = true;
+
+    const runConnectorUpdateCheck = async () => {
+      const updates = await checkConnectorUpdates(dispatch, {
+        onError: error => {
+          console.error('[Initialize] Failed to check connector updates:', error);
+        },
+      });
+      console.info(`[Initialize] Connector update check complete: ${updates.length} update(s) available`);
+    };
+
+    void runConnectorUpdateCheck();
+  }, [dispatch]);
 }

@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { useSelector } from "react-redux"
+import { useDispatch, useSelector } from "react-redux"
+import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { useConnector } from "@/hooks/useConnector"
 import { useAuth } from "@/hooks/useAuth"
 import { usePersonalServer } from "@/hooks/usePersonalServer"
+import { deleteExportedRun } from "@/lib/tauri-paths"
 import { fetchServerIdentity } from "@/services/serverRegistration"
+import { deleteRun, setConnectedPlatforms } from "@/state/store"
 import type { RootState } from "@/state/store"
-import { DEV_FLAGS } from "@/config/dev-flags"
-import { testConnectedPlatforms } from "@/pages/home/fixtures"
 
 interface ServerRegisteredPayload {
   status: number
@@ -24,6 +25,7 @@ export interface ImportSourceFilterOption {
 }
 
 export function useImportsSection() {
+  const dispatch = useDispatch()
   const [searchParams, setSearchParams] = useSearchParams()
   const runs = useSelector((state: RootState) => state.app.runs)
   const platforms = useSelector((state: RootState) => state.app.platforms)
@@ -36,6 +38,16 @@ export function useImportsSection() {
   const [serverId, setServerId] = useState<string | null>(null)
   // Bumped when the HTTP server is actually ready (not just spawned)
   const [readyTick, setReadyTick] = useState(0)
+  const runsRef = useRef(runs)
+  const platformsRef = useRef(platforms)
+
+  useEffect(() => {
+    runsRef.current = runs
+  }, [runs])
+
+  useEffect(() => {
+    platformsRef.current = platforms
+  }, [platforms])
 
   // Listen for server-registered event from auth flow
   // and personal-server-ready (HTTP server actually listening)
@@ -73,10 +85,9 @@ export function useImportsSection() {
   const serverReady = personalServer.status === "running" && !!serverId
 
   const sourceFilterOptions = useMemo<ImportSourceFilterOption[]>(() => {
-    const connectedSources =
-      DEV_FLAGS.useHomeTestFixtures && platforms.length === 0
-        ? testConnectedPlatforms
-        : platforms.filter(platform => connectedPlatforms[platform.id])
+    const connectedSources = platforms.filter(
+      platform => connectedPlatforms[platform.id]
+    )
 
     return [
       { value: IMPORTS_SOURCE_FILTER_ALL, label: "All" },
@@ -137,6 +148,30 @@ export function useImportsSection() {
       .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
   }, [filteredRuns])
 
+  const removeRun = useCallback(
+    async (runId: string) => {
+      const run = runsRef.current.find(entry => entry.id === runId)
+      if (!run) return
+
+      if (run.exportPath) {
+        await deleteExportedRun(run.exportPath)
+      }
+
+      dispatch(deleteRun(runId))
+
+      const activePlatforms = platformsRef.current
+      if (activePlatforms.length === 0) return
+
+      const platformIds = activePlatforms.map(platform => platform.id)
+      const connected = await invoke<Record<string, boolean>>(
+        "check_connected_platforms",
+        { platformIds }
+      )
+      dispatch(setConnectedPlatforms(connected))
+    },
+    [dispatch]
+  )
+
   return {
     activeImports,
     finishedImports,
@@ -146,6 +181,7 @@ export function useImportsSection() {
     platforms,
     startImport,
     stopExport,
+    removeRun,
     isAuthenticated,
     personalServer,
     serverId,

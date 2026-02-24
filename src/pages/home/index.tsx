@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { MotionConfig } from "motion/react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { useSelector } from "react-redux"
 import { usePlatforms } from "@/hooks/usePlatforms"
 import { useConnector } from "@/hooks/useConnector"
-import { useConnectorUpdates } from "@/hooks/useConnectorUpdates"
 import { useConnectedApps } from "@/hooks/useConnectedApps"
 import { usePersonalServer } from "@/hooks/usePersonalServer"
 import type { Platform, RootState } from "@/types"
@@ -15,7 +14,6 @@ import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { ConnectedAppsList } from "@/pages/home/components/connected-apps-list"
 import { ConnectedSourcesList } from "@/pages/home/components/connected-sources-list"
 import { AvailableSourcesList } from "@/pages/home/components/available-sources-list"
-import { ConnectorUpdates } from "@/pages/home/components/connector-updates"
 import { Button } from "@/components/ui/button"
 import { ROUTES } from "@/config/routes"
 import {
@@ -23,23 +21,30 @@ import {
   getGrantParamsFromSearchParams,
 } from "@/lib/grant-params"
 import { getPlatformRegistryEntry } from "@/lib/platform/utils"
-import { DEV_FLAGS } from "@/config/dev-flags"
 import {
-  testConnectedApps,
+  CONNECTED_SOURCES_UI_DEBUG_SCENARIO_VALUES,
+  isConnectedSourcesUiDebugEnabled,
+  resolveConnectedSourcesUiDebugPlatforms,
+} from "./connected-sources-ui-debug"
+import {
   testConnectedPlatforms,
   testPlatforms,
-} from "./fixtures"
+} from "./home-debug-fixtures"
+import {
+  HOME_UI_DEBUG_SCENARIO_VALUES,
+  isHomeUiDebugEnabled,
+  resolveHomeUiDebugRuns,
+} from "./home-ui-debug"
 
 export function Home() {
+  const location = useLocation()
   const navigate = useNavigate()
   const {
     platforms,
     isPlatformConnected,
-    loadPlatforms,
     refreshConnectedStatus,
   } = usePlatforms()
-  const { startImport } = useConnector()
-  const { checkForUpdates } = useConnectorUpdates()
+  const { startImport, stopExport } = useConnector()
   const { connectedApps, fetchConnectedApps } = useConnectedApps()
   const personalServer = usePersonalServer()
   const runs = useSelector((state: RootState) => state.app.runs)
@@ -52,19 +57,25 @@ export function Home() {
     { value: "sources", label: "Your data" },
     { value: "apps", label: "Connected apps" },
   ]
+  const homeUiDebugEnabled = useMemo(
+    () => isHomeUiDebugEnabled(location.search),
+    [location.search]
+  )
+  const currentHomeUiDebugScenario = useMemo(
+    () => new URLSearchParams(location.search).get("scenario"),
+    [location.search]
+  )
+  const connectedSourcesUiDebugEnabled = useMemo(
+    () => isConnectedSourcesUiDebugEnabled(location.search),
+    [location.search]
+  )
+  const currentConnectedSourcesUiDebugScenario = useMemo(
+    () => new URLSearchParams(location.search).get("connectedSourcesScenario"),
+    [location.search]
+  )
 
-  const displayPlatforms =
-    platforms.length > 0
-      ? platforms
-      : DEV_FLAGS.useHomeTestFixtures
-        ? testPlatforms
-        : []
-  const displayConnectedApps =
-    connectedApps.length > 0
-      ? connectedApps
-      : DEV_FLAGS.useHomeTestFixtures
-        ? testConnectedApps
-        : []
+  const displayPlatforms = platforms
+  const displayConnectedApps = connectedApps
 
   // Fetch connected apps from Personal Server when it becomes available
   useEffect(() => {
@@ -77,11 +88,6 @@ export function Home() {
     personalServer.devToken,
     fetchConnectedApps,
   ])
-
-  // Derived state: recently completed platform IDs (memoized, not effect-stored)
-  useEffect(() => {
-    checkForUpdates()
-  }, [checkForUpdates])
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEnableTabMotion(true))
@@ -128,6 +134,17 @@ export function Home() {
     [startImport]
   )
 
+  const handleStopImport = useCallback(
+    async (runId: string) => {
+      try {
+        await stopExport(runId)
+      } catch (error) {
+        console.error("Stop import failed:", error)
+      }
+    },
+    [stopExport]
+  )
+
   const handleTestDeepLink = useCallback(() => {
     const trimmed = deepLinkInput.trim()
     if (!trimmed) return
@@ -143,17 +160,46 @@ export function Home() {
     }
   }, [deepLinkInput, navigate])
 
+  const setHomeUiDebugScenario = useCallback(
+    (scenario: string | null) => {
+      const nextParams = new URLSearchParams(location.search)
+      if (scenario) nextParams.set("scenario", scenario)
+      else nextParams.delete("scenario")
+      navigate({ search: `?${nextParams.toString()}` }, { replace: true })
+    },
+    [location.search, navigate]
+  )
+  const setConnectedSourcesUiDebugScenario = useCallback(
+    (scenario: string | null) => {
+      const nextParams = new URLSearchParams(location.search)
+      if (scenario) nextParams.set("connectedSourcesScenario", scenario)
+      else nextParams.delete("connectedSourcesScenario")
+      navigate({ search: `?${nextParams.toString()}` }, { replace: true })
+    },
+    [location.search, navigate]
+  )
+
   const availablePlatforms = useMemo(() => {
-    if (DEV_FLAGS.useHomeTestFixtures && platforms.length === 0) {
+    if (homeUiDebugEnabled && displayPlatforms.length === 0) {
       return testPlatforms
     }
     return displayPlatforms
-  }, [displayPlatforms, platforms.length])
+  }, [displayPlatforms, homeUiDebugEnabled])
+
+  const displayRuns = useMemo(
+    () =>
+      resolveHomeUiDebugRuns({
+        runs,
+        platforms: availablePlatforms,
+        search: location.search,
+      }),
+    [availablePlatforms, location.search, runs]
+  )
 
   const connectedCanonicalIdsFromRuns = useMemo(
     () =>
       new Set(
-        runs
+        displayRuns
           .filter(run => run.status === "success" && Boolean(run.exportPath))
           .map(
             run =>
@@ -165,12 +211,12 @@ export function Home() {
           )
           .filter((id): id is string => Boolean(id))
       ),
-    [runs]
+    [displayRuns]
   )
 
   // Separate available platforms (memoized to avoid re-filtering on every render)
   const connectedPlatformsList = useMemo(() => {
-    if (DEV_FLAGS.useHomeTestFixtures && platforms.length === 0) {
+    if (homeUiDebugEnabled && displayPlatforms.length === 0) {
       return testConnectedPlatforms
     }
     return displayPlatforms.filter(platform => {
@@ -181,15 +227,37 @@ export function Home() {
   }, [
     connectedCanonicalIdsFromRuns,
     displayPlatforms,
+    homeUiDebugEnabled,
     isPlatformConnected,
-    platforms.length,
   ])
+
+  const connectedPlatformIds = useMemo(
+    () => connectedPlatformsList.map(platform => platform.id),
+    [connectedPlatformsList]
+  )
+  const connectedSourcesPlatforms = useMemo(
+    () =>
+      resolveConnectedSourcesUiDebugPlatforms({
+        platforms: connectedPlatformsList,
+        search: location.search,
+      }),
+    [connectedPlatformsList, location.search]
+  )
+
+  const handleOpenRuns = useCallback(
+    (platform: Platform) => {
+      navigate(
+        ROUTES.source.replace(
+          ":platformId",
+          getPlatformRegistryEntry(platform)?.id ?? platform.id
+        )
+      )
+    },
+    [navigate]
+  )
 
   return (
     <PageContainer>
-      {/* Connector Updates - show when browser is ready */}
-      <ConnectorUpdates onReloadPlatforms={loadPlatforms} />
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MotionConfig reducedMotion={enableTabMotion ? "never" : "always"}>
@@ -204,23 +272,17 @@ export function Home() {
         {/* SOURCES */}
         <TabsContent value="sources" className="space-y-w8">
           <ConnectedSourcesList
-            platforms={connectedPlatformsList}
-            runs={runs}
-            headline="Your connected data"
-            onOpenRuns={platform =>
-              navigate(
-                ROUTES.source.replace(
-                  ":platformId",
-                  getPlatformRegistryEntry(platform)?.id ?? platform.id
-                )
-              )
-            }
+            platforms={connectedSourcesPlatforms}
+            runs={displayRuns}
+            headline="Your imported data"
+            onOpenRuns={handleOpenRuns}
           />
           <AvailableSourcesList
             platforms={availablePlatforms}
-            runs={runs}
+            runs={displayRuns}
             onExport={handleImportSource}
-            connectedPlatformIds={connectedPlatformsList.map(p => p.id)}
+            onStopRun={handleStopImport}
+            connectedPlatformIds={connectedPlatformIds}
           />
         </TabsContent>
 
@@ -233,32 +295,87 @@ export function Home() {
       {/* DEV ONLY SHORTCUT: RickRoll /connect link */}
       {import.meta.env.DEV && (
         <DebugTogglePanel title="Home debug">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="xs" variant="outline" asChild>
-                <a href="/connect?sessionId=grant-session-1770358735328&appId=rickroll&scopes=%5B%22read%3Achatgpt-conversations%22%5D">
-                  Open Rickroll connect
-                </a>
-              </Button>
+          <div className="grid grid-cols-2 divide-x">
+            <div className="space-y-2 pr-4">
+              <p className="text-xs font-medium">Home UI scenario</p>
+              <div className="flex flex-wrap gap-2">
+                {HOME_UI_DEBUG_SCENARIO_VALUES.map(scenario => (
+                  <Button
+                    key={scenario}
+                    type="button"
+                    size="xs"
+                    variant={currentHomeUiDebugScenario === scenario ? "default" : "outline"}
+                    onClick={() => setHomeUiDebugScenario(scenario)}
+                  >
+                    {scenario}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={homeUiDebugEnabled ? "outline" : "default"}
+                  onClick={() => setHomeUiDebugScenario(null)}
+                >
+                  real
+                </Button>
+              </div>
+              <div className="space-y-2 pt-1">
+                <p className="text-xs font-medium">Connected sources UI</p>
+                <div className="flex flex-wrap gap-2">
+                  {CONNECTED_SOURCES_UI_DEBUG_SCENARIO_VALUES.map(scenario => (
+                    <Button
+                      key={scenario}
+                      type="button"
+                      size="xs"
+                      variant={
+                        currentConnectedSourcesUiDebugScenario === scenario
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() => setConnectedSourcesUiDebugScenario(scenario)}
+                    >
+                      {scenario}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant={connectedSourcesUiDebugEnabled ? "outline" : "default"}
+                    onClick={() => setConnectedSourcesUiDebugScenario(null)}
+                  >
+                    real
+                  </Button>
+                </div>
+              </div>
             </div>
-            <form
-              className="flex flex-col gap-2"
-              onSubmit={e => {
-                e.preventDefault()
-                handleTestDeepLink()
-              }}
-            >
-              <input
-                type="text"
-                value={deepLinkInput}
-                onChange={e => setDeepLinkInput(e.target.value)}
-                placeholder="vana://connect?sessionId=...&secret=..."
-                className="rounded border px-2 py-1 text-xs"
-              />
-              <Button type="submit" size="xs" variant="outline">
-                Test deep link
-              </Button>
-            </form>
+            <div className="space-y-3 pl-4">
+              <p className="text-xs font-medium">Grant flow</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="xs" variant="outline" asChild>
+                  <a href="/connect?sessionId=grant-session-1770358735328&appId=rickroll&scopes=%5B%22read%3Achatgpt-conversations%22%5D">
+                    Open Rickroll connect
+                  </a>
+                </Button>
+              </div>
+              <form
+                className="flex flex-col gap-2"
+                onSubmit={e => {
+                  e.preventDefault()
+                  handleTestDeepLink()
+                }}
+              >
+                <input
+                  type="text"
+                  value={deepLinkInput}
+                  onChange={e => setDeepLinkInput(e.target.value)}
+                  placeholder="vana://connect?sessionId=...&secret=..."
+                  className="rounded border px-2 py-1 text-xs"
+                />
+                <Button type="submit" size="xs" variant="outline">
+                  Test deep link
+                </Button>
+              </form>
+            </div>
           </div>
         </DebugTogglePanel>
       )}

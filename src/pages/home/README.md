@@ -2,25 +2,22 @@
 
 ## What this is
 
-- Primary landing page for sources and connected apps, with browser readiness gating.
+- Primary landing page for sources and connected apps.
 
 ## Files
 
 - `index.tsx`: route entry, tab layout, hook orchestration.
-- `fixtures.ts`: optional test data for empty states.
-- `components/BrowserSetupSection.tsx`: browser availability and download UI.
+- `home-debug-fixtures.ts`: DEV-only fixture data for Home debug scenarios.
 - `components/available-sources-list.tsx`: available connector cards.
 - `components/connected-sources-list.tsx`: connected sources list and runs link.
 - `components/connected-apps-list.tsx`: connected apps list.
-- `components/connector-updates.tsx`: connector update list + download actions.
 
 ## Data flow
 
-- `useBrowserStatus` → setup UI + tab gating.
 - `usePlatforms` → platform list + connected status → source lists.
 - `useConnector` → start export run on source selection.
-- `useConnectorUpdates` → updates list + download actions.
 - `state.app.runs` + `state.app.connectedApps` → lists.
+- App-level `useInitialize` runs a silent connector update check on startup.
 
 ## App integration
 
@@ -32,19 +29,15 @@
 
 ## Behavior
 
-- Blocks tab content until the browser is ready; shows setup UI otherwise.
-- Shows connector updates panel when ready.
 - Provides source connect cards and connected apps list.
+- Does not render connector update UI; update checks happen silently at app init.
 
 ## Mock system (dev)
 
-- `VITE_USE_HOME_TEST_FIXTURES=true` swaps in fixture data for connected apps and sources.
-- Connected apps open in the browser using the same rules as Data Apps:
-  - `VITE_USE_RICKROLL_MOCK=true` forces RickRoll for all apps.
-  - Otherwise, live apps must define `externalUrl` in the app registry.
-  - Outside test/mock mode, connected apps do not open a URL.
+- `scenario=<name>` (URL param, DEV-only) enables Home UI debug scenarios.
+- When Home debug is enabled and live platforms are empty, fixture data is used.
 
 ## Notes
 
 - Not part of the grant flow.
-- Uses optional test fixtures when platform data is empty.
+- Uses DEV-only Home debug fixtures when `scenario` is set to a valid debug case.
