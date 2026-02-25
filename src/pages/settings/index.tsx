@@ -50,6 +50,7 @@ export function Settings() {
     activeSection,
     setActiveSection,
     dataPath,
+    personalServerDataPath,
     appVersion,
     logPath,
     nodeTestStatus,
@@ -65,6 +66,7 @@ export function Settings() {
     isAuthenticated,
     walletAddress,
     onOpenDataFolder,
+    onOpenPersonalServerFolder,
     onOpenLogFolder,
     onTestNodeJs,
     onDebugPaths,
@@ -72,6 +74,9 @@ export function Settings() {
     onCheckBrowserStatus,
     onSimulateNoChromeChange,
     onClearBrowserSession,
+    clearPersonalServerDataStatus,
+    clearPersonalServerDataError,
+    onClearPersonalServerData,
     onRevokeApp,
     onLogout,
     onSignIn,
@@ -106,6 +111,8 @@ export function Settings() {
         personalServer={personalServer}
         onRestartPersonalServer={personalServer.startServer}
         onStopPersonalServer={personalServer.stopServer}
+        personalServerDataPath={personalServerDataPath}
+        onOpenPersonalServerFolder={onOpenPersonalServerFolder}
       />
     )
   } else if (activeSection === "storage") {
@@ -144,6 +151,9 @@ export function Settings() {
         onStopPersonalServer={personalServer.stopServer}
         onSimulateNoChromeChange={onSimulateNoChromeChange}
         onOpenLogFolder={onOpenLogFolder}
+        clearPersonalServerDataStatus={clearPersonalServerDataStatus}
+        clearPersonalServerDataError={clearPersonalServerDataError}
+        onClearPersonalServerData={onClearPersonalServerData}
       />
     )
   } else if (activeSection === "imports") {

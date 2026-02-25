@@ -1,5 +1,6 @@
 import type { usePersonalServer } from "@/hooks/usePersonalServer"
 import { DEV_FLAGS } from "@/config/dev-flags"
+import { PlayIcon, SquareIcon } from "lucide-react"
 import { SettingsRowDescriptionCopy } from "@/pages/settings/components/settings-row-description-copy"
 import { SettingsDetailRow } from "@/pages/settings/components/settings-detail-row"
 import { SettingsRowDescriptionStatus } from "@/pages/settings/components/settings-row-description-status"
@@ -66,12 +67,16 @@ interface SettingsPersonalServerSectionProps {
   personalServer: ReturnType<typeof usePersonalServer>
   onRestartPersonalServer: () => void
   onStopPersonalServer: () => void
+  personalServerDataPath: string
+  onOpenPersonalServerFolder: () => void
 }
 
 export function SettingsPersonalServer({
   personalServer,
   onRestartPersonalServer,
   onStopPersonalServer,
+  personalServerDataPath,
+  onOpenPersonalServerFolder,
 }: SettingsPersonalServerSectionProps) {
   const isTestMode =
     DEV_FLAGS.useSettingsUiMocks && TEST_SERVER_STATUS_OVERRIDE !== null
@@ -101,6 +106,26 @@ export function SettingsPersonalServer({
         <SettingsCard>
           <div className="flex flex-col gap-0 px-4 py-0">
             <SettingsDetailRow
+              label="Controls"
+              value={
+                previewStatus === "running" ? (
+                  <SettingsRowAction onClick={() => onStopPersonalServer()}>
+                    <SquareIcon aria-hidden />
+                    Stop
+                  </SettingsRowAction>
+                ) : (
+                  <SettingsRowAction
+                    onClick={() => onRestartPersonalServer()}
+                    isLoading={previewStatus === "starting"}
+                    loadingLabel="Starting…"
+                  >
+                    <PlayIcon aria-hidden />
+                    Start
+                  </SettingsRowAction>
+                )
+              }
+            />
+            <SettingsDetailRow
               label="Server status"
               labelInfo="Runtime health of your local Personal Server process (running, starting, stopped, or error)."
               value={
@@ -127,22 +152,16 @@ export function SettingsPersonalServer({
               }
             />
             <SettingsDetailRow
-              label="Server controls"
               isLast
+              label="Data location"
+              labelInfo="The local folder where your Personal Server data is stored."
               value={
-                previewStatus === "running" ? (
-                  <SettingsRowAction onClick={() => onStopPersonalServer()}>
-                    Stop
-                  </SettingsRowAction>
-                ) : (
-                  <SettingsRowAction
-                    onClick={() => onRestartPersonalServer()}
-                    isLoading={previewStatus === "starting"}
-                    loadingLabel="Starting…"
-                  >
-                    Start
-                  </SettingsRowAction>
-                )
+                <SettingsRowAction
+                  onClick={onOpenPersonalServerFolder}
+                  disabled={!personalServerDataPath}
+                >
+                  Open
+                </SettingsRowAction>
               }
             />
           </div>
