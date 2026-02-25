@@ -29,7 +29,7 @@ describe("SettingsPersonalServer", () => {
   const getLocationRowOpenButton = () => {
     const locationRow = screen
       .getByText("Data location")
-      .closest('[data-slot="settings-detail-row"]')
+      .closest<HTMLElement>('[data-slot="settings-detail-row"]')
     if (!locationRow) {
       throw new Error("Location row not found")
     }
