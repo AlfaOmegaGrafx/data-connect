@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   SourceRowActionButton,
   SourceRowWithActions,
@@ -28,6 +28,7 @@ interface ConnectedSourcesListProps {
 }
 
 type OnboardingMessageState = "empty" | "early" | "mature"
+type SyncSourceFeedbackState = "running" | "backgrounding"
 
 function getOnboardingMessageState(
   connectedSourceCount: number
@@ -44,6 +45,59 @@ export function ConnectedSourcesList({
   onOpenRuns,
   onSyncSource,
 }: ConnectedSourcesListProps) {
+  const syncFeedbackTimeoutsRef = useRef<
+    Record<string, ReturnType<typeof setTimeout>[]>
+  >({})
+  const [syncFeedbackByPlatformId, setSyncFeedbackByPlatformId] = useState<
+    Record<string, SyncSourceFeedbackState>
+  >({})
+  const clearSyncFeedbackTimers = useCallback((platformId: string) => {
+    const existingTimers = syncFeedbackTimeoutsRef.current[platformId] ?? []
+    existingTimers.forEach(timer => clearTimeout(timer))
+    delete syncFeedbackTimeoutsRef.current[platformId]
+  }, [])
+  const triggerSyncFeedback = useCallback(
+    (platform: Platform) => {
+      if (!onSyncSource) return
+
+      onSyncSource(platform)
+      clearSyncFeedbackTimers(platform.id)
+      setSyncFeedbackByPlatformId(prev => ({
+        ...prev,
+        [platform.id]: "running",
+      }))
+
+      const moveToBackgroundTimer = setTimeout(() => {
+        setSyncFeedbackByPlatformId(prev => ({
+          ...prev,
+          [platform.id]: "backgrounding",
+        }))
+      }, 3_000)
+
+      const clearFeedbackTimer = setTimeout(() => {
+        setSyncFeedbackByPlatformId(prev => {
+          const { [platform.id]: _ignored, ...rest } = prev
+          return rest
+        })
+        clearSyncFeedbackTimers(platform.id)
+      }, 5_000)
+
+      syncFeedbackTimeoutsRef.current[platform.id] = [
+        moveToBackgroundTimer,
+        clearFeedbackTimer,
+      ]
+    },
+    [clearSyncFeedbackTimers, onSyncSource]
+  )
+  useEffect(() => {
+    return () => {
+      Object.values(syncFeedbackTimeoutsRef.current).forEach(timers => {
+        timers.forEach(timer => clearTimeout(timer))
+      })
+      syncFeedbackTimeoutsRef.current = {}
+    }
+  }, [])
+
   const onboardingMessageState = getOnboardingMessageState(platforms.length)
   const hasBlockingRun = useMemo(
     () => runs.some(run => isBlockingRun(run)),
@@ -87,7 +141,13 @@ export function ConnectedSourcesList({
         {platforms.map(platform => {
           const meta = getLastRunLabel(runs, platform.id)
           const hasActiveRun = activePlatformIds.has(platform.id)
-          const isSyncDisabled = !onSyncSource || hasBlockingRun || hasActiveRun
+          const syncFeedbackState = syncFeedbackByPlatformId[platform.id]
+          const isShowingSyncFeedback = Boolean(syncFeedbackState)
+          const isSyncDisabled =
+            !onSyncSource ||
+            hasBlockingRun ||
+            hasActiveRun ||
+            isShowingSyncFeedback
           return (
             <SourceRowWithActions
               key={platform.id}
@@ -103,16 +163,34 @@ export function ConnectedSourcesList({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <SourceRowActionButton
-                      className={cn("pl-4 pr-3.5")}
+                      className={cn("gap-2.5 pl-3.5 pr-3.5 justify-start")}
                       onClick={
-                        onSyncSource && !isSyncDisabled
-                          ? () => onSyncSource(platform)
+                        !isSyncDisabled
+                          ? () => triggerSyncFeedback(platform)
                           : undefined
                       }
                       disabled={isSyncDisabled}
                       aria-label={`Fetch latest data for ${platform.name}`}
                     >
-                      <RotateCcwIcon aria-hidden />
+                      {syncFeedbackState ? (
+                        <Text
+                          as="span"
+                          intent="fine"
+                          muted
+                          className="mt-[0.3em]"
+                        >
+                          {syncFeedbackState === "running"
+                            ? "Fetching…"
+                            : "Backgrounding…"}
+                        </Text>
+                      ) : null}
+                      <RotateCcwIcon
+                        className={cn(
+                          syncFeedbackState &&
+                            "animate-[spin_2s_linear_infinite_reverse]"
+                        )}
+                        aria-hidden
+                      />
                     </SourceRowActionButton>
                   </TooltipTrigger>
                   <TooltipContent side="top">
