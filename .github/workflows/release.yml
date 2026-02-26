@@ -140,6 +140,17 @@ jobs:
             --sign "Developer ID Application: Corsali, Inc (${{ secrets.APPLE_TEAM_ID }})" \
             personal-server/dist/${{ matrix.ps_binary_name }}
 
+      - name: Sign personal-server native modules (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "=== Signing native .node binaries in personal-server/dist/node_modules ==="
+          find personal-server/dist/node_modules -name "*.node" -type f | while read node_binary; do
+            echo "Signing: $node_binary"
+            codesign --force --options runtime --timestamp \
+              --sign "Developer ID Application: Corsali, Inc (${{ secrets.APPLE_TEAM_ID }})" \
+              "$node_binary"
+          done
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
