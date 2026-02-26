@@ -1,77 +1,97 @@
 # GitHub release process (deterministic)
 
-Use `npm run release:github` to perform a deterministic release flow:
+This repo has one release command: `npm run release:github`.
 
-1. Validate tools (`git`, `gh`) and GitHub auth
-2. Require a clean working tree
-3. Require current branch equals target branch (default `main`)
-4. Pull latest with fast-forward only
+It does all of this in order:
+
+1. Validate `git` and `gh`, and `gh` auth
+2. Require clean working tree
+3. Require current branch equals target branch (`main` by default)
+4. `git pull --ff-only origin <target>`
 5. Bump `src-tauri/tauri.conf.json` version
-6. Commit the version bump
-7. Push branch
-8. Create GitHub release tag (`vX.Y.Z`)
+6. `git add src-tauri/tauri.conf.json`
+7. `git commit -m "release: vX.Y.Z"`
+8. `git push origin <target>` (unless `--no-push`)
+9. `gh release create vX.Y.Z --target <target> ...`
 
-Creating the GitHub release triggers `.github/workflows/release.yml` (`on: release: created`), which builds and uploads artifacts.
+Creating the GitHub release triggers `.github/workflows/release.yml` (`on: release: created`) to build/upload artifacts.
 
-The script also enforces version ordering:
+## Direct answers (branch + tag confusion)
 
-- New version must be greater than `src-tauri/tauri.conf.json` version
-- New version must be greater than latest remote `v*` semver tag
+- **Do I create a new branch first?**  
+  **No** for normal releases. Run this from `main`. The script enforces that.
+- **Do I commit the version bump manually?**  
+  **No** if you use `npm run release:github`; it commits for you.
+- **When is the GitHub release tag created?**  
+  At the end of that same command via `gh release create ...`.
+- **Is there another npm release command after push?**  
+  **No.** `npm run release:github` already does push + release creation.
 
-## Command
+## Normal release (recommended)
 
 ```bash
+git checkout main
+git pull --ff-only origin main
 npm run release:github -- --version 0.8.0
 ```
 
-## Options
-
-- `--version X.Y.Z` (required)
-- `--target main` (optional; default `main`)
-- `--title "DataConnect vX.Y.Z"` (optional)
-- `--notes "Release vX.Y.Z"` (optional)
-- `--dry-run` (optional; print planned actions only)
-- `--no-push` (optional; commit locally, skip push)
-- `--show-versions` (optional; print local + latest remote version)
-- `--suggest-version` (optional; print next valid patch version)
-- `--check-version` (optional; validate ordering and exit)
-
-## Examples
-
-Dry run:
+## Safe preview before releasing
 
 ```bash
 npm run release:github -- --version 0.8.0 --dry-run
 ```
 
-Create release with custom notes:
+## Preflight helpers
 
-```bash
-npm run release:github -- --version 0.8.0 --notes "Adds source export fixes."
-```
-
-Show current version state:
+Show current/suggested versions:
 
 ```bash
 npm run release:versions
 ```
 
-Show suggested next version only:
-
-```bash
-npm run release:github -- --suggest-version
-```
-
-Validate candidate version only:
+Validate version ordering only:
 
 ```bash
 npm run release:github -- --version 0.8.0 --check-version
 ```
 
+## If you insist on release branch + PR first
+
+This is manual and **not** what the default script flow expects.
+
+1. On feature branch, bump `src-tauri/tauri.conf.json`, commit, open PR, merge to `main`.
+2. After merge, run release command from `main`:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+npm run release:github -- --version 0.8.0
+```
+
+Do **not** run `npm run release:github` on a non-target branch unless you intentionally set `--target` to that branch.
+
+## Options
+
+- `--version X.Y.Z` (required unless using helper flags only)
+- `--target main` (default `main`; current branch must match)
+- `--title "DataConnect vX.Y.Z"` (optional)
+- `--notes "Release vX.Y.Z"` (optional)
+- `--dry-run` (print planned actions only)
+- `--no-push` (commit locally, skip push, still attempts release create if you continue)
+- `--show-versions` (print local + latest remote version)
+- `--suggest-version` (print next valid patch version)
+- `--check-version` (validate ordering and exit)
+
+## Version rules enforced by script
+
+- New version must be greater than `src-tauri/tauri.conf.json` version
+- New version must be greater than latest remote `v*` semver tag
+- Tag must not already exist locally/remotely
+
 ## Common failure cases
 
 - Dirty git tree -> commit/stash first.
-- Not on target branch -> checkout target branch.
+- Not on target branch -> checkout target branch (usually `main`).
 - Tag already exists -> choose a new version.
 - `gh` unauthenticated -> run `gh auth login`.
-- Missing CI secrets -> GitHub workflow fails after release creation.
+- Missing CI secrets -> release workflow fails after release is created.
