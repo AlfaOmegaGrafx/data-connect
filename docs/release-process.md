@@ -1,8 +1,19 @@
 # GitHub release process (deterministic)
 
-This repo has one release command: `npm run release:github`.
+## Just do this
 
-It does all of this in order:
+```bash
+# Replace <version> with the version you are releasing (example: 0.8.1)
+git checkout main
+git pull --ff-only origin main
+npm run release:github -- --version <version>
+```
+
+That is the full release flow for normal releases.
+
+## What this command does automatically
+
+`npm run release:github -- --version <version>` performs all of this in order:
 
 1. Validate `git` and `gh`, and `gh` auth
 2. Require clean working tree
@@ -29,16 +40,12 @@ Creating the GitHub release triggers `.github/workflows/release.yml` (`on: relea
 
 ## Normal release (recommended)
 
-```bash
-git checkout main
-git pull --ff-only origin main
-npm run release:github -- --version 0.8.0
-```
+Use the exact `Just do this` block above.
 
 ## Safe preview before releasing
 
 ```bash
-npm run release:github -- --version 0.8.0 --dry-run
+npm run release:github -- --version <version> --dry-run
 ```
 
 ## Preflight helpers
@@ -52,7 +59,7 @@ npm run release:versions
 Validate version ordering only:
 
 ```bash
-npm run release:github -- --version 0.8.0 --check-version
+npm run release:github -- --version <version> --check-version
 ```
 
 ## If you insist on release branch + PR first
@@ -65,7 +72,7 @@ This is manual and **not** what the default script flow expects.
 ```bash
 git checkout main
 git pull --ff-only origin main
-npm run release:github -- --version 0.8.0
+npm run release:github -- --version <version>
 ```
 
 Do **not** run `npm run release:github` on a non-target branch unless you intentionally set `--target` to that branch.
