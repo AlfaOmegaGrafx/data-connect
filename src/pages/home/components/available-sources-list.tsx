@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ArrowUpRight, PauseIcon } from "lucide-react"
+import { ArrowUpRight } from "lucide-react"
 import {
   ActionButton,
   ActionPanel,
@@ -8,7 +8,7 @@ import {
 import { EyebrowBadge } from "@/components/typography/eyebrow-badge"
 import { Text } from "@/components/typography/text"
 import { Spinner } from "@/components/elements/spinner"
-import { SourceStack } from "@/components/elements/source-row"
+import { SourceStack } from "@/components/elements/source-stack"
 import { cn } from "@/lib/classes"
 import type { Platform, Run } from "@/types"
 import { getConnectSourceEntries } from "@/lib/platform/utils"
@@ -16,6 +16,7 @@ import { OpenExternalLink } from "@/components/typography/link-open-external"
 import { buildAvailableCards } from "./available-sources-list.lib"
 import { ConfirmAction } from "@/components/elements/confirm-action"
 import { buttonVariants } from "@/components/ui/button"
+import { buildRunningImportExpectationLine } from "./available-sources-estimator"
 import {
   getConnectingAccountLine,
   getConnectingStatusLine,
@@ -139,9 +140,17 @@ export function AvailableSourcesList({
               : undefined
             const connectingExpectationLine =
               isConnecting && connectingRun
-                ? getConnectingExpectationLine(connectingRun, nowMs)
+                ? buildRunningImportExpectationLine({
+                    run: connectingRun,
+                    runs,
+                    nowMs,
+                  })
                 : undefined
-            const isPausedByAnotherRun =
+            const isConnectingAndBlocking =
+              isConnecting && connectingRun
+                ? isBlockingRun(connectingRun)
+                : false
+            const isWaitingForBlockingRun =
               hasBlockingRun && isAvailable && !isConnecting
 
             const infoSlot = isConnecting ? (
@@ -159,6 +168,11 @@ export function AvailableSourcesList({
                 <Text as="p" intent="fine" muted truncate align="right">
                   {connectingStatusLine}
                 </Text>
+                {isConnectingAndBlocking ? (
+                  <Text as="p" intent="fine" muted truncate align="right">
+                    Finish sign-in to unlock other imports
+                  </Text>
+                ) : null}
                 {connectingRun ? (
                   <ConfirmAction
                     title="Cancel import?"
@@ -194,11 +208,14 @@ export function AvailableSourcesList({
                 trailingSlot={
                   isConnecting ? (
                     <Spinner className="size-4" aria-hidden="true" />
-                  ) : isPausedByAnotherRun ? (
-                    <PauseIcon
-                      className="size-4 text-foreground-muted/70"
-                      aria-hidden="true"
-                    />
+                  ) : isWaitingForBlockingRun ? (
+                    <EyebrowBadge
+                      variant="outline"
+                      className="text-foreground-muted"
+                      title="Another import is waiting for sign-in"
+                    >
+                      Waiting
+                    </EyebrowBadge>
                   ) : isAvailable ? null : (
                     <EyebrowBadge
                       variant="outline"
@@ -250,25 +267,6 @@ export function AvailableSourcesList({
       </div>
     </section>
   )
-}
-
-function getConnectingExpectationLine(run: Run, nowMs: number): string {
-  if (import.meta.env.DEV && run.id.startsWith("home-debug-")) {
-    return "1438 items · 2m run · ETA 7m"
-  }
-
-  const elapsedMs = nowMs - new Date(run.startDate).getTime()
-  const safeElapsedMs = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0
-  const elapsedMinutes = Math.floor(safeElapsedMs / 60000)
-  const elapsedLabel =
-    elapsedMinutes < 1 ? "<1m elapsed" : `${elapsedMinutes}m elapsed`
-
-  const itemCount = run.itemCount
-  if (typeof itemCount === "number" && itemCount >= 0) {
-    return `${new Intl.NumberFormat().format(itemCount)} items found · ${elapsedLabel} · Can take a while`
-  }
-
-  return `Import in progress · ${elapsedLabel} · Can take a while`
 }
 
 const Header = () => {

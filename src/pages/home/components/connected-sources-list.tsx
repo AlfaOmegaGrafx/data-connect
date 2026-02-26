@@ -1,21 +1,30 @@
-import { SourceRow } from "@/components/elements/source-row"
+import { useMemo } from "react"
 import {
-  ActionButton,
-  ActionPanel,
-} from "@/components/typography/button-action"
+  SourceRowActionButton,
+  SourceRowWithActions,
+} from "@/components/elements/source-row"
+import { ActionPanel } from "@/components/typography/button-action"
 import { Text } from "@/components/typography/text"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { ROUTES } from "@/config/routes"
 import { cn } from "@/lib/classes"
 import { getLastRunLabel } from "@/lib/platform/ui"
 import { buildSettingsUrl } from "@/pages/settings/url"
 import type { Platform, Run } from "@/types"
+import { ChevronRightIcon, RotateCcwIcon } from "lucide-react"
 import { Link } from "react-router-dom"
+import { isBlockingRun } from "./available-sources-list.policy"
 
 interface ConnectedSourcesListProps {
   platforms: Platform[]
   runs: Run[]
   headline?: string
   onOpenRuns?: (platform: Platform) => void
+  onSyncSource?: (platform: Platform) => void
 }
 
 type OnboardingMessageState = "empty" | "early" | "mature"
@@ -33,8 +42,20 @@ export function ConnectedSourcesList({
   runs,
   headline = "Your sources at the moment.",
   onOpenRuns,
+  onSyncSource,
 }: ConnectedSourcesListProps) {
   const onboardingMessageState = getOnboardingMessageState(platforms.length)
+  const hasBlockingRun = useMemo(
+    () => runs.some(run => isBlockingRun(run)),
+    [runs]
+  )
+  const activePlatformIds = useMemo(
+    () =>
+      new Set(
+        runs.filter(run => run.status === "running").map(run => run.platformId)
+      ),
+    [runs]
+  )
 
   if (platforms.length === 0) {
     return (
@@ -65,19 +86,54 @@ export function ConnectedSourcesList({
       <div className="flex flex-col gap-3 action-outset">
         {platforms.map(platform => {
           const meta = getLastRunLabel(runs, platform.id)
+          const hasActiveRun = activePlatformIds.has(platform.id)
+          const isSyncDisabled = !onSyncSource || hasBlockingRun || hasActiveRun
           return (
-            <ActionButton
+            <SourceRowWithActions
               key={platform.id}
-              onClick={onOpenRuns ? () => onOpenRuns(platform) : undefined}
-              size="xl"
-              className={cn("items-start justify-between text-left")}
-            >
-              <SourceRow
-                iconName={platform.name}
-                label={platform.name}
-                meta={meta}
-              />
-            </ActionButton>
+              iconName={platform.name}
+              label={platform.name}
+              meta={meta}
+              rowAction={{
+                onClick: onOpenRuns ? () => onOpenRuns(platform) : undefined,
+                disabled: !onOpenRuns,
+                ariaLabel: `Open ${platform.name}`,
+              }}
+              middleSlot={
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SourceRowActionButton
+                      className={cn("pl-4 pr-3.5")}
+                      onClick={
+                        onSyncSource && !isSyncDisabled
+                          ? () => onSyncSource(platform)
+                          : undefined
+                      }
+                      disabled={isSyncDisabled}
+                      aria-label={`Fetch latest data for ${platform.name}`}
+                    >
+                      <RotateCcwIcon aria-hidden />
+                    </SourceRowActionButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Fetch your latest data
+                  </TooltipContent>
+                </Tooltip>
+              }
+              endSlotClassName="[&_svg:not([class*='size-']):not([data-slot=spinner])]:size-7!"
+              endSlot={
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex h-full w-full items-center justify-center">
+                      <ChevronRightIcon aria-hidden />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    View data source details
+                  </TooltipContent>
+                </Tooltip>
+              }
+            />
           )
         })}
       </div>
