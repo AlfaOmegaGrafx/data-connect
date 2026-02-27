@@ -24,6 +24,8 @@ export interface ConnectorScope {
 export interface ConnectorMetadata {
   /** Unique identifier for the connector (e.g., 'chatgpt-001') */
   id?: string;
+  /** Semantic version string (e.g., '1.0.0') */
+  version?: string;
   /** Display name of the platform */
   name: string;
   /** Company/organization that owns the platform */
@@ -43,6 +45,8 @@ export interface ConnectorMetadata {
     documents?: string;
     [key: string]: unknown;
   };
+  /** Relative path to an SVG icon file (e.g. "icons/chatgpt.svg") */
+  iconURL?: string;
 }
 
 /** API interface injected into connectors */
