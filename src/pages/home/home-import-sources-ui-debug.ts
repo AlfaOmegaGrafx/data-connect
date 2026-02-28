@@ -98,10 +98,6 @@ export function getHomeImportSourcesScenario(
   return getScenarioFromSearch(search)
 }
 
-function platformById(platforms: Platform[]): Map<string, Platform> {
-  return new Map(platforms.map(platform => [platform.id, platform]))
-}
-
 function buildSyntheticPlatform(entryId: string): Platform {
   return {
     id: entryId,
