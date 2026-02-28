@@ -364,6 +364,29 @@ static CONNECTOR_WINDOWS: std::sync::LazyLock<
     std::sync::Mutex<HashMap<String, String>>,
 > = std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 
+/// Load connector metadata from the connectors directory (user dir first, then bundled).
+fn load_connector_metadata(app: &AppHandle, company: &str, filename: &str) -> Option<ConnectorMetadata> {
+    let company_lower = company.to_lowercase();
+    let json_name = format!("{}.json", filename);
+
+    let candidates: Vec<PathBuf> = [
+        get_user_connectors_dir().map(|d| d.join(&company_lower).join(&json_name)),
+        Some(get_connectors_dir(app).join(&company_lower).join(&json_name)),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    for path in candidates {
+        if let Ok(content) = fs::read_to_string(&path) {
+            if let Ok(meta) = serde_json::from_str::<ConnectorMetadata>(&content) {
+                return Some(meta);
+            }
+        }
+    }
+    None
+}
+
 /// Load connector script from the connectors directory
 /// Checks user directory first, then bundled directory
 fn load_connector_script(app: &AppHandle, company: &str, filename: &str) -> Option<String> {
@@ -595,8 +618,11 @@ async fn start_playwright_run(
     use std::io::{BufRead, BufReader, Write};
     use std::process::{Command, Stdio};
 
-    log::info!("Starting Playwright run for {} (platform: {}, company: {}, filename: {})",
-        run_id, platform_id, company, filename);
+    let connector_version = load_connector_metadata(&app, &company, &filename)
+        .and_then(|m| m.version)
+        .unwrap_or_else(|| "unknown".to_string());
+    log::info!("Starting Playwright run for {} (platform: {}, company: {}, filename: {}, connector v{})",
+        run_id, platform_id, company, filename, connector_version);
 
     // Phase 1: Check browser availability
     let _ = app.emit("connector-status", serde_json::json!({
@@ -924,6 +950,12 @@ pub async fn start_connector_run(
             app, run_id, platform_id, filename, company, name, connect_url, simulate_no_chrome
         ).await;
     }
+
+    let connector_version = load_connector_metadata(&app, &company, &filename)
+        .and_then(|m| m.version)
+        .unwrap_or_else(|| "unknown".to_string());
+    log::info!("Starting connector run for {} (platform: {}, company: {}, filename: {}, connector v{})",
+        run_id, platform_id, company, filename, connector_version);
 
     let window_label = format!("connector-{}", run_id);
     let use_network_capture = runtime.as_deref() == Some("network-capture");
