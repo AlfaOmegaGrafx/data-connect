@@ -80,6 +80,7 @@ beforeEach(() => {
   mockUsePersonalServer.mockReturnValue({
     status: "stopped",
     port: null,
+    devToken: null,
     error: null,
     startServer: vi.fn(),
     stopServer: vi.fn(),
@@ -112,17 +113,38 @@ beforeEach(() => {
 })
 
 describe("Settings", () => {
-  it("shows the connected apps section by default", () => {
+  it("fetches connected apps when the Personal Server is ready", () => {
+    const mockFetchConnectedApps = vi.fn()
+    mockUsePersonalServer.mockReturnValue({
+      status: "running",
+      port: 4319,
+      devToken: "dev-token",
+      error: null,
+      startServer: vi.fn(),
+      stopServer: vi.fn(),
+    })
+    mockUseConnectedApps.mockReturnValue({
+      connectedApps: [],
+      fetchConnectedApps: mockFetchConnectedApps,
+      removeApp: vi.fn(),
+    })
+
+    renderSettings()
+
+    expect(mockFetchConnectedApps).toHaveBeenCalledWith(4319, "dev-token")
+  })
+
+  it("shows the app access section by default", () => {
     const { getByRole, getByText } = renderSettings()
 
-    expect(getByRole("heading", { name: "Connected apps" })).toBeTruthy()
+    expect(getByRole("heading", { name: "App access" })).toBeTruthy()
     expect(getByText("No connected apps")).toBeTruthy()
   })
 
   it("switches to the apps section from the nav", () => {
     const { getAllByRole, getByText, getByTestId } = renderSettings()
 
-    const [appsButton] = getAllByRole("button", { name: "Connected apps" })
+    const [appsButton] = getAllByRole("button", { name: "App access" })
     fireEvent.click(appsButton)
 
     expect(getByText("No connected apps")).toBeTruthy()
@@ -150,7 +172,7 @@ describe("Settings", () => {
 
   it("falls back to connected apps for invalid section values", () => {
     const { getByRole } = renderSettings(`${ROUTES.settings}?section=invalid`)
-    expect(getByRole("heading", { name: "Connected apps" })).toBeTruthy()
+    expect(getByRole("heading", { name: "App access" })).toBeTruthy()
   })
 
   it("clears source param when switching between non-import sections", () => {
