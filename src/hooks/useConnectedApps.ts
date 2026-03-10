@@ -26,7 +26,7 @@ async function grantToConnectedApp(grant: Grant): Promise<ConnectedApp> {
     name,
     permissions: grant.scopes,
     connectedAt: grant.createdAt,
-    externalUrl: await fetchBuilderAppUrl(grant.granteeAddress),
+    externalUrl: (await fetchBuilderAppUrl(grant.granteeAddress)) ?? undefined,
   }
 }
 
