@@ -28,6 +28,7 @@ interface AvailableSourcesListProps {
   onExport: (platform: Platform) => void
   onStopRun: (runId: string) => Promise<void> | void
   connectedPlatformIds: string[]
+  className?: string
 }
 
 export function AvailableSourcesList({
@@ -36,6 +37,7 @@ export function AvailableSourcesList({
   onExport,
   onStopRun,
   connectedPlatformIds,
+  className,
 }: AvailableSourcesListProps) {
   const [stoppingRunId, setStoppingRunId] = useState<string | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -93,7 +95,7 @@ export function AvailableSourcesList({
 
   if (availableCards.length === 0) {
     return (
-      <section className="space-y-gap">
+      <section className={cn("space-y-gap", className)}>
         <Header />
         <div className="action-outset">
           <ActionPanel>
@@ -105,7 +107,7 @@ export function AvailableSourcesList({
   }
 
   return (
-    <section className="space-y-gap">
+    <section className={cn("space-y-gap", className)}>
       <Header />
       <div className="grid grid-cols-2 gap-3 action-outset">
         {availableCards.map(

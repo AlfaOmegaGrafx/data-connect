@@ -259,6 +259,7 @@ export function Home() {
           onExport={handleImportSource}
           onStopRun={handleStopImport}
           connectedPlatformIds={homeImportSourcesDebug.connectedPlatformIds}
+          className="pt-2"
         />
       </div>
 
