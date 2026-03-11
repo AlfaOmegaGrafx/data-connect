@@ -27,7 +27,7 @@ export const CONNECT_DEBUG_PARAM_PRESETS: {
   {
     label: "ChatGPT",
     params: {
-      appId: "chatgpt",
+      appId: "debug",
       scopes: ["chatgpt.conversations"],
     },
   },

@@ -27,7 +27,7 @@ function getDebugSession(params?: Pick<GrantFlowParams, "sessionId" | "appId" | 
     granteeAddress: "0x0000000000000000000000000000000000000000",
     scopes,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    appName: params?.appId ?? "Debug App",
+    appName: "Test App",
     appIcon: "🔗",
   }
 }
