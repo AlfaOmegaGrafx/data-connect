@@ -158,7 +158,10 @@ describe("SettingsPersonalServer", () => {
       </TooltipProvider>
     )
 
+    expect(screen.getByText("Public endpoint")).toBeTruthy()
     expect(screen.getByText("Server is stopped. Endpoint unavailable.")).toBeTruthy()
+    expect(screen.getByText("MCP endpoint")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Copy MCP endpoint" })).toBeNull()
   })
 
   it("shows endpoint message for error state", () => {
@@ -179,6 +182,7 @@ describe("SettingsPersonalServer", () => {
       </TooltipProvider>
     )
 
+    expect(screen.getByText("Public endpoint")).toBeTruthy()
     expect(
       screen.getByText("Server failed to start. Retry to regenerate endpoint.")
     ).toBeTruthy()
@@ -199,7 +203,31 @@ describe("SettingsPersonalServer", () => {
       </TooltipProvider>
     )
 
+    expect(screen.getByText("Public endpoint")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Starting…" })).toBeNull()
     expect(screen.queryByRole("button", { name: "Retry start" })).toBeNull()
+  })
+
+  it("shows a copyable MCP endpoint when a public endpoint exists", () => {
+    render(
+      <TooltipProvider delayDuration={120}>
+        <SettingsPersonalServer
+          personalServer={makePersonalServer({
+            status: "running",
+            port: 7777,
+            tunnelUrl: "https://real.server.vana.org",
+          })}
+          onRestartPersonalServer={vi.fn()}
+          onStopPersonalServer={vi.fn()}
+          onSignInToStart={vi.fn()}
+          isAuthenticated={true}
+          personalServerDataPath="/Users/test/data-connect/personal-server"
+          onOpenPersonalServerFolder={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(screen.getByText("MCP endpoint")).toBeTruthy()
+    expect(screen.getByText("https://real.server.vana.org/mcp")).toBeTruthy()
   })
 })

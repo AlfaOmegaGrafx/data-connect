@@ -24,6 +24,11 @@ type ResolvedEndpointInfo =
   | { kind: "local"; url: string }
   | { kind: "none"; url: null }
 
+function getMcpEndpoint(url: string | null): string | null {
+  if (!url) return null
+  return `${url.replace(/\/$/, "")}/mcp`
+}
+
 function getResolvedEndpoint(
   tunnelUrl: string | null,
   port: number | null
@@ -93,12 +98,8 @@ export function SettingsPersonalServer({
   const previewError = personalServer.error
   const previewTunnelUrl = personalServer.tunnelUrl
   const endpoint = getResolvedEndpoint(previewTunnelUrl, previewPort)
-  const endpointLabel =
-    endpoint.kind === "public"
-      ? "Public endpoint"
-      : endpoint.kind === "local"
-        ? "Local endpoint"
-        : "Endpoint"
+  const mcpEndpoint =
+    endpoint.kind === "public" ? getMcpEndpoint(endpoint.url) : null
   const serverStatusDescription = getServerStatusDescription(
     previewStatus,
     previewPort,
@@ -193,11 +194,12 @@ export function SettingsPersonalServer({
                 className="h-tab"
               />
               <SettingsDetailRow
-                isLast
+                hasTopRule
                 className="px-4"
                 label="Authentication"
                 value={
-                  <Text intent="small" dim className="pr-2.5">
+                  // className="pr-2.5"
+                  <Text intent="small" dim>
                     Vana account connected
                   </Text>
                 }
@@ -210,7 +212,7 @@ export function SettingsPersonalServer({
         <SettingsCardStack>
           <SettingsCard>
             <SettingsDetailRow
-              label={endpointLabel}
+              label="Public endpoint"
               className="px-4"
               value={
                 <SettingsRowDescriptionCopy
@@ -220,14 +222,32 @@ export function SettingsPersonalServer({
                   copyLabel="Copy URL"
                   // className={cn(previewStatus !== "running" && "pr-2.5")}
                   className="pr-2.5"
-                  textClassName="max-w-[300px] sm:max-w-[420px]"
+                  textClassName=""
                   // Callum says I know but don't touch please! :)
                   buttonClassName="max-h-[21.17px]"
                 />
               }
             />
             <SettingsDetailRow
-              isLast
+              hasTopRule
+              className="px-4"
+              label="MCP endpoint"
+              labelInfo="Use this in Claude Code or another MCP client as your custom MCP server URL. It connects to your Personal Server."
+              value={
+                <SettingsRowDescriptionCopy
+                  value={mcpEndpoint}
+                  intent="small"
+                  emptyLabel="Available once endpoint is live"
+                  copyLabel="Copy MCP endpoint"
+                  // purposefully revised pr here, Callum says leave please
+                  className="pr-0.5"
+                  textClassName=""
+                  buttonClassName="max-h-[21.17px]"
+                />
+              }
+            />
+            <SettingsDetailRow
+              hasTopRule
               className="px-4"
               label="Data location"
               value={

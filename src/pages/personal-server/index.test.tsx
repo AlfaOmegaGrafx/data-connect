@@ -143,7 +143,7 @@ describe("PersonalServer page", () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText("Endpoint")).toBeTruthy()
+      expect(screen.getByText("Public endpoint")).toBeTruthy()
     })
     expect(screen.queryByRole("button", { name: "Sign in to start" })).toBeNull()
   })
@@ -172,6 +172,8 @@ describe("PersonalServer page", () => {
     expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy()
     expect(screen.getByText("Running")).toBeTruthy()
     expect(screen.getAllByText("https://abc123.server.vana.org").length).toBeGreaterThan(0)
+    expect(screen.getByText("MCP endpoint")).toBeTruthy()
+    expect(screen.getByText("https://abc123.server.vana.org/mcp")).toBeTruthy()
   })
 
   it("renders auth-error debug scenario", async () => {
@@ -237,7 +239,7 @@ describe("PersonalServer page", () => {
     )
 
     expect(screen.getByRole("button", { name: "Sign in to start" })).toBeTruthy()
-    expect(screen.queryByText("Endpoint")).toBeNull()
+    expect(screen.queryByText("Public endpoint")).toBeNull()
   })
 
   it("writes and removes debug scenario via panel controls", async () => {
