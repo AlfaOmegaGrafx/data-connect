@@ -4,8 +4,11 @@
  * Runs as a sidecar process, receives commands via stdin, sends results via stdout.
  *
  * Commands:
- * - { type: "run", runId, connectorPath, url, headless }
+ * - { type: "run", runId, connectorPath, url, headless, allowHeaded }
  * - { type: "stop", runId }
+ * - { type: "evaluate", runId, script }
+ * - { type: "input-response", runId, requestId, data?, error? }
+ * - { type: "screenshot", runId }
  * - { type: "quit" }
  *
  * Supports two-phase connectors:
@@ -26,14 +29,24 @@ const CHROME_PATHS = {
   linux: '/usr/bin/google-chrome'
 };
 
-// Get browser cache directory - checks PLAYWRIGHT_BROWSERS_PATH first (for bundled browsers)
+// Get browser cache directory - checks multiple candidate paths
 function getBrowserCacheDir() {
   if (process.env.PLAYWRIGHT_BROWSERS_PATH) {
     log(`Using PLAYWRIGHT_BROWSERS_PATH: ${process.env.PLAYWRIGHT_BROWSERS_PATH}`);
     return process.env.PLAYWRIGHT_BROWSERS_PATH;
   }
   const home = process.env.HOME || process.env.USERPROFILE || '';
-  return path.join(home, '.dataconnect', 'browsers');
+  const candidates = [
+    path.join(home, '.dataconnect', 'browsers'),
+    path.join(home, '.dataconnect', 'playwright-runner', 'node_modules', 'playwright-core', '.local-browsers'),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) {
+      log(`Found browser cache: ${dir}`);
+      return dir;
+    }
+  }
+  return candidates[0];
 }
 
 // Check if system Chrome exists
@@ -251,7 +264,17 @@ const activeRuns = new Map();
 
 // Send message to parent process
 function send(msg) {
-  console.log(JSON.stringify(msg));
+  process.stdout.write(JSON.stringify(msg) + '\n');
+}
+
+function drainStdout() {
+  return new Promise(resolve => {
+    if (process.stdout.writableNeedDrain) {
+      process.stdout.once('drain', resolve);
+    } else {
+      process.stdout.write('', resolve);
+    }
+  });
 }
 
 // Log to stderr (doesn't interfere with JSON protocol)
@@ -321,7 +344,7 @@ function createPageApi(runState, runId) {
   // Helper to get current page, throw if browser is closed
   function requirePage() {
     if (runState.browserClosed || !runState.page) {
-      throw new Error('Browser is closed. Use page.httpFetch() for HTTP requests or page.showBrowser() to reopen.');
+      throw new Error('Browser is closed. Use page.httpFetch() for HTTP requests.');
     }
     return runState.page;
   }
@@ -379,10 +402,21 @@ function createPageApi(runState, runId) {
 
     evaluate: async (script) => {
       const page = requirePage();
-      if (typeof script === 'string') {
-        return await page.evaluate(script);
-      }
       return await page.evaluate(script);
+    },
+
+    screenshot: async () => {
+      const page = requirePage();
+      const buffer = await page.screenshot({ type: 'jpeg', quality: 70, timeout: 5000 });
+      return buffer.toString('base64');
+    },
+
+    requestInput: async (payload) => {
+      const requestId = `input-${++runState.requestCounter}`;
+      send({ type: 'request-input', runId, requestId, payload });
+      return new Promise((resolve, reject) => {
+        runState.pendingInputs.set(requestId, { resolve, reject });
+      });
     },
 
     sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
@@ -393,6 +427,8 @@ function createPageApi(runState, runId) {
         log(`[status] ${value}`);
       } else if (key === 'error') {
         log(`[error] ${value}`);
+      } else if (key === 'result') {
+        runState.hasResult = true;
       }
       send({ type: 'data', runId, key, value });
     },
@@ -482,15 +518,33 @@ function createPageApi(runState, runId) {
       log('Browser closed, process stays alive for background work');
     },
 
-    // Reopen browser in headed mode (e.g., for login when headless session expired).
-    // Closes any existing browser first, then opens a new headed one.
+    // Escalate to headed mode for live human interaction (e.g., interactive CAPTCHAs).
+    // Gated by allowHeaded capability — if the driver doesn't support headed mode,
+    // navigates in the existing headless browser and returns { headed: false }.
     showBrowser: async (url) => {
       log('showBrowser requested');
+
+      if (runState.browserClosed) {
+        log('showBrowser called but browser is already closed');
+        return { headed: false };
+      }
+
+      if (!runState.allowHeaded) {
+        log('Headed mode not available — navigating headless');
+        if (url && runState.page) {
+          try {
+            await runState.page.goto(url, { waitUntil: 'domcontentloaded' });
+          } catch (e) {
+            log(`showBrowser headless navigation failed: ${e.message}`);
+          }
+        }
+        send({ type: 'log', runId, message: 'Headed interaction unavailable — staying headless' });
+        return { headed: false };
+      }
 
       // Close existing browser if open
       if (runState.context && !runState.browserClosed) {
         log('Closing existing browser before reopening headed');
-        // Set flag BEFORE closing so the disconnect handler doesn't exit the process
         runState.browserClosedByConnector = true;
         try {
           await runState.context.close();
@@ -517,7 +571,7 @@ function createPageApi(runState, runId) {
           runState.page = null;
           activeRuns.delete(runId);
           send({ type: 'status', runId, status: 'STOPPED' });
-          process.exit(0);
+          drainStdout().then(() => process.exit(0));
         }
       });
 
@@ -535,6 +589,7 @@ function createPageApi(runState, runId) {
 
       send({ type: 'log', runId, message: 'Browser opened for user interaction' });
       log('Headed browser opened');
+      return { headed: true };
     },
 
     // Switch to headless mode — browser becomes invisible but stays running.
@@ -576,7 +631,7 @@ function createPageApi(runState, runId) {
           runState.page = null;
           activeRuns.delete(runId);
           send({ type: 'status', runId, status: 'STOPPED' });
-          process.exit(0);
+          drainStdout().then(() => process.exit(0));
         }
       });
 
@@ -658,8 +713,8 @@ function createPageApi(runState, runId) {
 }
 
 // Run a connector
-async function runConnector(runId, connectorPath, url, headless = true) {
-  log(`Starting run ${runId} with connector ${connectorPath} (headless: ${headless})`);
+async function runConnector(runId, connectorPath, url, headless = true, allowHeaded = true) {
+  log(`Starting run ${runId} with connector ${connectorPath} (headless: ${headless}, allowHeaded: ${allowHeaded})`);
 
   // Derive connector ID for persistent browser profile
   const connectorFileName = path.basename(connectorPath, path.extname(connectorPath));
@@ -674,8 +729,11 @@ async function runConnector(runId, connectorPath, url, headless = true) {
     browserClosedByConnector: false,
     connectorCompleted: false,
     headless,
+    allowHeaded,
     userDataDir,
     browserPath: null,
+    requestCounter: 0,
+    pendingInputs: new Map(),
   };
 
   try {
@@ -716,7 +774,7 @@ async function runConnector(runId, connectorPath, url, headless = true) {
         runState.page = null;
         activeRuns.delete(runId);
         send({ type: 'status', runId, status: 'STOPPED' });
-        process.exit(0);
+        drainStdout().then(() => process.exit(0));
       }
     });
 
@@ -764,9 +822,10 @@ async function runConnector(runId, connectorPath, url, headless = true) {
     const result = await runConnectorFn.call(null, pageApi);
     log('Connector function completed with result:', result ? 'has result' : 'undefined');
 
-    // Unwrap the data if connector returns { success: true, data: ... }
-    const exportData = (result && result.success && result.data) ? result.data : result;
-    send({ type: 'result', runId, data: exportData });
+    if (!runState.hasResult && result != null) {
+      const exportData = (result && result.success && result.data) ? result.data : result;
+      send({ type: 'result', runId, data: exportData });
+    }
     send({ type: 'status', runId, status: 'COMPLETE' });
 
     // Mark as completed to prevent disconnect handler from sending STOPPED
@@ -786,6 +845,7 @@ async function runConnector(runId, connectorPath, url, headless = true) {
 
     // Exit process after successful completion
     log('Connector completed successfully, exiting');
+    await drainStdout();
     process.exit(0);
 
   } catch (error) {
@@ -803,6 +863,7 @@ async function runConnector(runId, connectorPath, url, headless = true) {
 
     // Exit process after error
     log('Connector failed, exiting');
+    await drainStdout();
     process.exit(1);
   }
 }
@@ -812,6 +873,11 @@ async function stopRun(runId) {
   const run = activeRuns.get(runId);
   if (run) {
     log(`Stopping run ${runId}`);
+    // Reject any pending requestInput promises so the connector doesn't hang
+    for (const [, pending] of run.runState.pendingInputs) {
+      pending.reject(new Error('Run stopped'));
+    }
+    run.runState.pendingInputs.clear();
     if (run.runState && run.runState.context && !run.runState.browserClosed) {
       await run.runState.context.close().catch(() => {});
     }
@@ -837,7 +903,7 @@ async function main() {
 
       switch (cmd.type) {
         case 'run':
-          runConnector(cmd.runId, cmd.connectorPath, cmd.url, cmd.headless !== false);
+          runConnector(cmd.runId, cmd.connectorPath, cmd.url, cmd.headless !== false, cmd.allowHeaded !== false);
           break;
 
         case 'stop':
@@ -870,6 +936,65 @@ async function main() {
             }
           });
           break;
+
+        case 'evaluate': {
+          const evalRun = activeRuns.get(cmd.runId);
+          if (!evalRun) {
+            send({ type: 'evaluate-result', runId: cmd.runId, error: `No active run: ${cmd.runId}` });
+            break;
+          }
+          const { runState: evalState } = evalRun;
+          if (evalState.browserClosed || !evalState.page) {
+            send({ type: 'evaluate-result', runId: cmd.runId, error: 'Browser is closed' });
+            break;
+          }
+          // Non-blocking: don't await so stdin loop keeps processing other commands.
+          // Wrapped in try so synchronous throws (e.g. page torn down mid-call)
+          // always produce an evaluate-result instead of hanging the driver.
+          try {
+            evalState.page.evaluate(cmd.script)
+              .then(result => send({ type: 'evaluate-result', runId: cmd.runId, result }))
+              .catch(e => send({ type: 'evaluate-result', runId: cmd.runId, error: e.stack || e.message }));
+          } catch (e) {
+            send({ type: 'evaluate-result', runId: cmd.runId, error: e.stack || e.message });
+          }
+          break;
+        }
+
+        case 'input-response': {
+          const inputRun = activeRuns.get(cmd.runId);
+          if (!inputRun) break;
+          const pending = inputRun.runState.pendingInputs.get(cmd.requestId);
+          if (!pending) break;
+          inputRun.runState.pendingInputs.delete(cmd.requestId);
+          if (cmd.error) {
+            pending.reject(new Error(typeof cmd.error === 'string' ? cmd.error : JSON.stringify(cmd.error)));
+          } else {
+            pending.resolve(cmd.data);
+          }
+          break;
+        }
+
+        case 'screenshot': {
+          const ssRun = activeRuns.get(cmd.runId);
+          if (!ssRun) {
+            send({ type: 'screenshot-result', runId: cmd.runId, error: `No active run: ${cmd.runId}` });
+            break;
+          }
+          const { runState: ssState } = ssRun;
+          if (ssState.browserClosed || !ssState.page) {
+            send({ type: 'screenshot-result', runId: cmd.runId, error: 'Browser is closed' });
+            break;
+          }
+          try {
+            ssState.page.screenshot({ type: 'jpeg', quality: 70, timeout: 5000 })
+              .then(buffer => send({ type: 'screenshot-result', runId: cmd.runId, data: buffer.toString('base64') }))
+              .catch(e => send({ type: 'screenshot-result', runId: cmd.runId, error: e.stack || e.message }));
+          } catch (e) {
+            send({ type: 'screenshot-result', runId: cmd.runId, error: e.stack || e.message });
+          }
+          break;
+        }
 
         default:
           log(`Unknown command: ${cmd.type}`);
