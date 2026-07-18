@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> **This repository has moved to [https://github.com/PDP-Connect/data-connect](https://github.com/PDP-Connect/data-connect).**
+> It is now maintained as part of the PDP-Connect lab under LF Decentralized Trust.
+> This copy is archived and read-only; please open issues and pull requests at the new home.
+
 # DataConnect
 
 > DataConnect is being made local-first and vendor-neutral. The app runs and exports your data to disk with no sign-in and no external account. Vana is one optional storage and sync provider you can enable in Settings, not a bundled default. Some code paths, URLs, and package names still assume Vana; we are actively generalizing these as the project moves toward a neutral, provider-agnostic architecture.
